@@ -1,23 +1,21 @@
 import { Injectable } from '@angular/core';
-import { v4 as uuid } from 'uuid';
-import { CollaborationService } from '../colaboration/collaboration.service';
 import { DiagramExportService } from '../exports/diagram-export.service';
 import { UmlValidationService } from '../colaboration/uml-validation.service';
 
-
-
 @Injectable({ providedIn: 'root' })
 export class EditionService {
-  readonly MIN_W = 180;
-  readonly NAME_H = 30;
-  readonly MIN_ATTRS_H = 40;
-  readonly MIN_METHS_H = 40;
-  readonly PAD_V = 10;
+  readonly MIN_W = 150;
+  readonly NAME_H = 32;
+  readonly LINE_H = 18;
+  readonly PAD_V = 12;
+  readonly PAD_H = 10;
+
   constructor(
     private exportService: DiagramExportService,
-		private umlValidationService: UmlValidationService
-  ){}
-  // ========= Edición de campos =========
+    private umlValidationService: UmlValidationService
+  ) {}
+
+  // ========= Edición rápida de campos (fallback inline) =========
   startEditing(
     model: any,
     paper: any,
@@ -34,7 +32,6 @@ export class EditionService {
     const selector = MAP[field];
     const currentValue = model.attr(`${selector}/text`) || '';
 
-    // Obtener escala actual del papel y rectángulo de pantalla exacto del elemento
     const currentScale = (typeof paper.scale === 'function' ? paper.scale().sx : 1) || 1;
     const cellView = typeof paper.findViewByModel === 'function' ? paper.findViewByModel(model) : null;
     const viewEl = cellView?.el as SVGElement | undefined;
@@ -47,21 +44,16 @@ export class EditionService {
     if (viewEl && typeof viewEl.getBoundingClientRect === 'function') {
       const nodeRect = viewEl.getBoundingClientRect();
       absX = nodeRect.left;
-      editorWidth = Math.max(140, Math.round(nodeRect.width));
-
-      const nameH = (this.NAME_H || 30) * currentScale;
-      const sep1Y = parseFloat(model.attr('.sep-name/y1')) || (this.NAME_H || 30);
-      const sep2Y = parseFloat(model.attr('.sep-attrs/y1')) || ((this.NAME_H || 30) + 40);
+      editorWidth = Math.max(150, Math.round(nodeRect.width));
 
       if (field === 'name') {
         absY = nodeRect.top;
-        editorHeight = Math.max(28, Math.round(nameH));
+        editorHeight = Math.max(28, Math.round(this.NAME_H * currentScale));
       } else if (field === 'attributes') {
-        absY = nodeRect.top + sep1Y * currentScale;
-        editorHeight = Math.max(55, Math.round((sep2Y - sep1Y) * currentScale));
+        absY = nodeRect.top + Math.round(this.NAME_H * currentScale);
       } else {
-        absY = nodeRect.top + sep2Y * currentScale;
-        editorHeight = Math.max(55, Math.round(nodeRect.bottom - absY));
+        const sep2 = parseFloat(model.attr('.sep-attrs/y1')) || (this.NAME_H + 40);
+        absY = nodeRect.top + Math.round(sep2 * currentScale);
       }
     } else {
       const paperRect = paper.el.getBoundingClientRect();
@@ -74,7 +66,7 @@ export class EditionService {
       : document.createElement('textarea');
 
     editor.value = currentValue;
-    const fontSz = Math.max(10, Math.min(14, Math.round(12.5 * currentScale)));
+    const fontSz = Math.max(11, Math.min(14, Math.round(12.5 * currentScale)));
     Object.assign(editor.style, {
       position: 'fixed',
       left: `${absX}px`,
@@ -83,11 +75,11 @@ export class EditionService {
       height: field === 'name' ? `${editorHeight}px` : 'auto',
       border: '2px solid #2563eb',
       borderRadius: '2px',
-      padding: '2px 6px',
+      padding: '2px 8px',
       zIndex: '99999',
       fontSize: `${fontSz}px`,
       fontWeight: field === 'name' ? 'bold' : 'normal',
-      fontFamily: field === 'name' ? 'sans-serif' : 'monospace',
+      fontFamily: 'Inter, system-ui, sans-serif',
       color: '#0f172a',
       backgroundColor: '#ffffff',
       boxShadow: '0 4px 14px rgba(0,0,0,0.25)',
@@ -110,10 +102,9 @@ export class EditionService {
       if (save) {
         const raw = (editor as HTMLInputElement | HTMLTextAreaElement).value;
         const newValue = field === 'name' ? raw.trim() : raw.replace(/\r?\n/g, '\n');
-        model.attr(`${selector}/text`, newValue);
         model.set(field, newValue);
         collab?.broadcast({ t: 'edit_text', id: model.id, field, value: newValue });
-        this.scheduleAutoResize(model, paper);
+        this.autoResizeUmlClass(model, paper);
       }
       editor.parentNode && editor.parentNode.removeChild(editor);
     };
@@ -130,8 +121,8 @@ export class EditionService {
       }
     });
   }
-  
-  // ========= Edición de etiquetas de enlaces =========
+
+  // ========= Edición de etiquetas de enlaces (Cardinalidad / Roles) =========
   startEditingLabel(
     model: any,
     paper: any,
@@ -214,70 +205,142 @@ export class EditionService {
     input.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') {
         e.preventDefault();
-        finish(e.key !== 'Escape'); // Enter/Espacio = guardar, Escape = cancelar
+        finish(e.key !== 'Escape');
       }
     });
   }
-  // ========= Actualiza la posición de los puertos o puntos de enlace =========
+
+  // ========= Actualiza la posición de los 4 puertos centrados =========
   updatePorts(model: any) {
     if (!model?.isElement?.()) return;
-    const { width, height } = model.size();
-    model.portProp('top',    'args', { x: width / 2, y: 0 });
+    const size = typeof model.size === 'function' ? model.size() : (model.get('size') || { width: 150, height: 90 });
+    const width = size.width || 150;
+    const height = size.height || 90;
+    model.portProp('top', 'args', { x: width / 2, y: 0 });
     model.portProp('bottom', 'args', { x: width / 2, y: height });
-    model.portProp('left',   'args', { x: 0,        y: height / 2 });
-    model.portProp('right',  'args', { x: width,    y: height / 2 });
+    model.portProp('left', 'args', { x: 0, y: height / 2 });
+    model.portProp('right', 'args', { x: width, y: height / 2 });
   }
 
   scheduleAutoResize(model: any, paper: any) {
+    if (!model?.isElement?.()) return;
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => this.autoResizeUmlClass(model, paper));
+      this.autoResizeUmlClass(model, paper);
     });
   }
 
-  /**************************************************************************************************
-  *                  FUNCIONES PRIVADAS
-  ***************************************************************************************************/ 
-
-  // ========= Auto-resize + puertos =========
-  private getTextBBox(model: any, paper: any, selector: string): number {
-    const view = paper.findViewByModel(model);
-    const node = view?.findBySelector(selector)?.[0] as SVGGraphicsElement | undefined;
-    try { return node ? node.getBBox().height : 0; } catch { return 0; }
-  }
-
-  // ========= Auto-ajusta el tamaño del diagrama UML de clase al contenido =========
-  autoResizeUmlClass(model: any, paper: any) {
+  // ========= Auto-ajusta el ancho y alto del diagrama UML con métricas exactas, justas y limpias =========
+  autoResizeUmlClass(model: any, paper?: any) {
     if (!model?.isElement?.()) return;
 
-    const width  = Math.max(this.MIN_W, (model.get('size')?.width) || this.MIN_W);
-    const nameH  = this.NAME_H;
+    if (typeof model.updateRectangles === 'function') {
+      model.updateRectangles();
+      this.updatePorts(model);
+      return;
+    }
 
-    const attrsHText = this.getTextBBox(model, paper, '.uml-class-attrs-text');
-    const methsHText = this.getTextBBox(model, paper, '.uml-class-methods-text');
+    const nameText = (model.get('name') || model.attr('.uml-class-name-text/text') || 'Entidad').trim();
+    const rawAttrs = model.get('attributes') ?? model.attr('.uml-class-attrs-text/text') ?? '';
+    const rawMeths = model.get('methods') ?? model.attr('.uml-class-methods-text/text') ?? '';
 
-    const attrsH = Math.max(this.MIN_ATTRS_H, Math.round((attrsHText || 0) + this.PAD_V));
-    const methsH = Math.max(this.MIN_METHS_H, Math.round((methsHText || 0) + this.PAD_V));
+    const attrLines: string[] = typeof rawAttrs === 'string'
+      ? rawAttrs.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0)
+      : (Array.isArray(rawAttrs) ? rawAttrs.map((a: any) => `${a.name}: ${a.type}`) : []);
+
+    const methLines: string[] = typeof rawMeths === 'string'
+      ? rawMeths.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0)
+      : (Array.isArray(rawMeths) ? rawMeths.map((m: any) => `${m.name}(${m.parameters || ''}): ${m.returnType || 'void'}`) : []);
+
+    let maxChars = nameText.length + 2;
+    for (const line of attrLines) {
+      if (line.length > maxChars) maxChars = line.length;
+    }
+    for (const line of methLines) {
+      if (line.length > maxChars) maxChars = line.length;
+    }
+
+    const optimalWidth = Math.max(this.MIN_W, Math.ceil(maxChars * 7.2 + 20));
+
+    const nameH = this.NAME_H; // 32px
+    const attrsH = attrLines.length > 0 ? (attrLines.length * this.LINE_H + this.PAD_V) : 22;
+    const methsH = methLines.length > 0 ? (methLines.length * this.LINE_H + this.PAD_V) : 22;
     const totalH = Math.round(nameH + attrsH + methsH);
 
-    model.attr('.uml-class-name-rect/height', nameH);
+    const ySep1 = Math.round(nameH);
+    const ySep2 = Math.round(nameH + attrsH);
 
-    const x1 = 0, x2 = width;
-    const y1 = Math.round(nameH);
-    const y2 = Math.round(nameH + attrsH);
+    const formattedAttrsText = attrLines.join('\n');
+    const formattedMethsText = methLines.join('\n');
 
     model.attr({
-      '.uml-outer': { width, height: totalH, refWidth: '100%', refHeight: '100%', stroke: '#1e293b', strokeWidth: 1.5, rx: 0, ry: 0 },
-      '.sep-name':  { x1, y1, x2, y2: y1, stroke: '#1e293b', strokeWidth: 1.5 },
-      '.sep-attrs': { x1, y1: y2, x2, y2, stroke: '#1e293b', strokeWidth: 1.5 }
+      '.uml-outer': {
+        x: 0,
+        y: 0,
+        width: optimalWidth,
+        height: totalH,
+        stroke: '#1e293b',
+        strokeWidth: 1.5,
+        fill: '#ffffff',
+        rx: 0,
+        ry: 0
+      },
+      '.uml-class-name-rect': {
+        x: 0,
+        y: 0,
+        width: optimalWidth,
+        height: nameH,
+        fill: '#f1f5f9',
+        stroke: 'none',
+        strokeWidth: 0
+      },
+      '.sep-name': {
+        x1: 0,
+        y1: ySep1,
+        x2: optimalWidth,
+        y2: ySep1,
+        stroke: '#1e293b',
+        strokeWidth: 1.5,
+        shapeRendering: 'crispEdges'
+      },
+      '.sep-attrs': {
+        x1: 0,
+        y1: ySep2,
+        x2: optimalWidth,
+        y2: ySep2,
+        stroke: '#1e293b',
+        strokeWidth: 1.5,
+        shapeRendering: 'crispEdges'
+      },
+      '.uml-class-name-text': {
+        ref: '.uml-class-name-rect',
+        refX: 0.5,
+        refY: 0.5,
+        textAnchor: 'middle',
+        yAlignment: 'middle',
+        fontWeight: 'bold',
+        fontSize: 13,
+        fill: '#0f172a',
+        text: nameText
+      },
+      '.uml-class-attrs-text': {
+        x: 10,
+        y: nameH + 14,
+        textAnchor: 'start',
+        fontSize: 12,
+        fill: '#1e293b',
+        text: formattedAttrsText
+      },
+      '.uml-class-methods-text': {
+        x: 10,
+        y: ySep2 + 14,
+        textAnchor: 'start',
+        fontSize: 12,
+        fill: '#1e293b',
+        text: formattedMethsText
+      }
     });
 
-    model.attr('.uml-class-attrs-text/transform',  `translate(10, ${Math.round(nameH + 10)})`);
-    model.attr('.uml-class-attrs-text/textWrap/width', width - 20);
-
-    model.attr('.uml-class-methods-text/transform', `translate(10, ${Math.round(nameH + attrsH + 10)})`);
-    model.attr('.uml-class-methods-text/textWrap/width', width - 20);
-
-    model.resize(width, totalH);
+    model.resize(optimalWidth, totalH);
     this.updatePorts(model);
   }
 }

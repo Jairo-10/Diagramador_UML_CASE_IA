@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Inject, PLATFORM_ID, signal, EventEmitter } from '@angular/core';
 import { UmlClass } from '../../models/uml-class.model';
 import { EditionService } from './edition.service';
 import { v4 as uuid } from 'uuid';
@@ -14,6 +14,9 @@ export class DiagramService {
 	private graph: any;
 	private paper: any;
 	private selectedCell: any = null;
+	public selectedElement = signal<any>(null);
+	public onOpenClassEditor = new EventEmitter<any>();
+	private isClearingGraph = false;
 	private storageKey = '';
 	private currentRoomId = '';
 	private saveTimeout: any = null;
@@ -40,8 +43,13 @@ export class DiagramService {
 	 */
 	async initialize(paperElement: HTMLElement, roomId: string): Promise<void> {
 		try {
-			// Configura la clave de almacenamiento local
+			// Cancelar cualquier guardado pendiente de una sala anterior
+			if (this.saveTimeout) clearTimeout(this.saveTimeout);
+
+			// Configura la sala y clave de almacenamiento local DE INMEDIATO
+			this.currentRoomId = roomId;
 			this.storageKey = `diagram-${roomId}`;
+
 			// Importamos JointJS
 			this.joint = await import('jointjs');
 
@@ -52,13 +60,16 @@ export class DiagramService {
 				(this.joint.dia.LinkView.prototype.options as any).arrowheadMarkup = '';
 			}
 
-			// Creamos o limpiamos el grafo de JointJS para aislar salas
+			// Limpiar grafo de forma segura sin disparar eventos destructivos de guardado
+			this.isClearingGraph = true;
 			if (this.graph) {
 				this.graph.clear();
 			} else {
 				this.graph = new this.joint.dia.Graph();
 			}
 			this.selectedCell = null;
+			this.selectedElement.set(null);
+			this.isClearingGraph = false;
 
 			const rect = paperElement.getBoundingClientRect();
 			const w = rect.width > 100 ? rect.width : 2000;
@@ -200,7 +211,7 @@ export class DiagramService {
 
       
 			this.graph.on('remove', (cell: any, _collection: any, opt: any = {}) => {
-				if (opt?.collab) return; // viene de remoto, no re-emitir
+				if (this.isClearingGraph || opt?.collab) return; // si se está limpiando la memoria o viene de remoto, no emitir
 				this.collab.broadcast({ t: 'delete', id: cell.id });
 				const umlJson = this.exportService.export(this.graph);
 				this.umlValidationService.validateModel(umlJson);
@@ -365,8 +376,9 @@ export class DiagramService {
 				this.collab.broadcast({ t: 'resize', id: m.id, w: s.width, h: s.height });
 				pendingResize = null;
 			});
-			// Guardar en localStorage ante cualquier cambio
+			// Guardar en localStorage y backend ante cambios reales del usuario
 			this.graph.on('add remove change', () => {
+				if (this.isClearingGraph) return;
 				this.persist();
 			});
 
@@ -377,6 +389,7 @@ export class DiagramService {
 			this.paper.on('cell:pointerclick', (cellView: any) => {
 				this.clearSelection();
 				this.selectedCell = cellView.model;
+				this.selectedElement.set(this.selectedCell?.isElement?.() ? this.selectedCell : null);
 				if (this.selectedCell?.isElement?.()) {
 					this.selectedCell.attr('.uml-outer/stroke', '#8b5cf6');
 					this.selectedCell.attr('.uml-outer/stroke-width', 2.5);
@@ -390,19 +403,10 @@ export class DiagramService {
 			});
 			//👉 Deselect al hacer click en el fondo
 			this.paper.on('blank:pointerclick', () => this.clearSelection());
-			this.paper.on('cell:pointerdblclick', (cellView: any, _evt: any, x: number, y: number) => {
-				this.clearSelection();
+			this.paper.on('cell:pointerdblclick', (cellView: any, _evt: any, _x: number, _y: number) => {
 				const model = cellView.model;
 				if (!model?.isElement?.()) return;
-				// lee posiciones de separadores (puestas por autoResize)
-				const bbox = model.getBBox();
-				const relY = y - bbox.y;
-				const sep1 = parseFloat(model.attr('.sep-name/y1')) || (this.edition.NAME_H + 0.5);
-				const sep2 = parseFloat(model.attr('.sep-attrs/y1')) || (this.edition.NAME_H + 40 + 0.5);
-				let field: 'name' | 'attributes' | 'methods' = 'methods';
-				if (relY < sep1) field = 'name';
-				else if (relY < sep2) field = 'attributes';
-				this.edition.startEditing(model, this.paper, field, x, y, this.collab);
+				this.openClassEditor(model);
 			});
 			//👉 Doble clic en una relación para editar su etiqueta
 			this.paper.on('link:pointerdblclick', (linkView: any, evt: MouseEvent, x: number, y: number) => {
@@ -526,42 +530,34 @@ export class DiagramService {
 
 			this.currentRoomId = roomId;
 
-			// Carga inteligente: primero localStorage local (más reciente), sino PostgreSQL
+			// 1. Carga previa optimista desde localStorage para evitar parpadeo blanco
 			const saved = localStorage.getItem(this.storageKey);
-			let loadedFromLocal = false;
 			if (saved) {
 				try {
 					const json: UmlExportDTO = JSON.parse(saved);
-					if (json && Array.isArray(json.classes)) {
-						// Si existen clases, las cargamos; si está vacío, respetamos el lienzo limpio
-						if (json.classes.length > 0) {
-							this.loadFromJson(json, false);
-						}
-						loadedFromLocal = true;
-						console.log('⚡ Estado local cargado (respetando estado actual del lienzo).');
+					if (json && Array.isArray(json.classes) && json.classes.length > 0) {
+						this.loadFromJson(json, false);
+						console.log('⚡ Render previo optimista desde localStorage.');
 					}
 				} catch (err) {
 					console.warn('Error leyendo localStorage:', err);
 				}
 			}
 
-			if (!loadedFromLocal) {
-				this.backup.getBackup(roomId).subscribe({
-					next: (data) => {
-						if (data && Array.isArray(data.classes) && data.classes.length > 0) {
-							this.loadFromJson(data, false);
-							console.log('☁️ Diagrama sincronizado desde PostgreSQL.');
-						}
-					},
-					error: (err) => console.log('Sala nueva o sin respaldo previo en BD:', err)
-				});
-			}
+			// 2. SIEMPRE sincronizar con PostgreSQL (fuente autoritativa de la sala)
+			this.backup.getBackup(roomId).subscribe({
+				next: (data) => {
+					if (data && Array.isArray(data.classes)) {
+						this.loadFromJson(data, true);
+						console.log('📥 Diagrama sincronizado autoritativamente desde PostgreSQL.');
+					}
+				},
+				error: (err) => console.log('Sala sin respaldo previo en BD:', err)
+			});
 
+			// 3. Inicializar colaboracion en tiempo real
 			this.collab.init(roomId);
 			console.log('JointJS inicializado en room:', roomId);
-			if (this.graph.getCells().length === 0) {
-				this.collab.broadcast({ t: 'request_full_state' });
-			}
 			return Promise.resolve();
 		} catch (error) {
 			console.error('Error al inicializar JointJS:', error);
@@ -687,6 +683,7 @@ export class DiagramService {
 
 		if (!remote) {
 			this.graph.addCell(link);       // 👈 disparará 'add' → broadcast
+			this.persist(true);
 		}
 		return link;
 	}
@@ -737,6 +734,7 @@ export class DiagramService {
 			this.selectedCell.attr('.connection/stroke-width', 2.2);
 		}
 		this.selectedCell = null;
+		this.selectedElement.set(null);
 	}
 
 	// ========= Obtener índice de etiqueta clicada =========
@@ -780,10 +778,10 @@ export class DiagramService {
 						return `${m.name}${params}${ret};`;
 					}).join('\n')
 				: (classModel.methods || '');
-			// 👇 Usar la clase custom
+			// 👇 Usar la clase custom con tamaño base compacto
 			const umlClass = new this.joint.shapes.custom.UMLClass({
-				position: classModel.position,
-				size: classModel.size || { width: 180, height: 110 },
+				position: classModel.position || { x: 100, y: 100 },
+				size: classModel.size || { width: 160, height: 90 },
 				name: classModel.name || 'Entidad',
 				attributes: attributesText,
 				methods: methodsText,
@@ -800,8 +798,11 @@ export class DiagramService {
 			umlClass.addPort({ group: 'inout', id: 'left' });
 			umlClass.addPort({ group: 'inout', id: 'right' });
 			umlClass.on('change:size', () => this.edition.updatePorts(umlClass));
-			umlClass.on('change:attrs', () => this.edition.scheduleAutoResize(this.paper, umlClass));
-			// 🔹 Añadir al grafo SOLO UNA VEZ
+			umlClass.on('change:name change:attributes change:methods', () => {
+				this.edition.autoResizeUmlClass(umlClass, this.paper);
+			});
+			// 🔹 Auto-ajuste métrico sincronizado antes y después de insertar
+			this.edition.autoResizeUmlClass(umlClass, this.paper);
 			this.graph.addCell(umlClass);
 			this.edition.scheduleAutoResize(umlClass, this.paper);
 			umlClass.toFront();
@@ -818,6 +819,7 @@ export class DiagramService {
 						methods: classModel.methods,
 					},
 				});
+				this.persist(true);
 			}
 			return umlClass;
 		} catch (error) {
@@ -847,48 +849,54 @@ export class DiagramService {
 		if (this.joint.shapes.custom?.UMLClass) return;
 		this.joint.shapes.custom = this.joint.shapes.custom || {};
 		this.joint.shapes.custom.UMLClass = this.joint.dia.Element.define('custom.UMLClass', {
-			size: { width: 180, height: 110 },
+			size: { width: 150, height: 90 },
 			name: 'Entidad',
 			attributes: '',
 			methods: '',
 			attrs: {
 				'.uml-outer': {
-					width: 180,
-					height: 110,
-					refWidth: '100%',
-					refHeight: '100%',
+					x: 0,
+					y: 0,
+					width: 150,
+					height: 90,
 					strokeWidth: 1.5,
 					stroke: '#1e293b',
 					fill: '#ffffff',
 					rx: 0,
 					ry: 0,
 				},
-				'.uml-class-name-rect': { refWidth: '100%', height: 30, fill: '#f8fafc' },
-				'.sep-name': { stroke: '#1e293b', strokeWidth: 1, shapeRendering: 'crispEdges' },
-				'.sep-attrs': { stroke: '#1e293b', strokeWidth: 1, shapeRendering: 'crispEdges' },
+				'.uml-class-name-rect': { x: 0, y: 0, width: 150, height: 32, fill: '#f1f5f9', stroke: 'none', strokeWidth: 0 },
+				'.sep-name': { x1: 0, y1: 32, x2: 150, y2: 32, stroke: '#1e293b', strokeWidth: 1.5, shapeRendering: 'crispEdges' },
+				'.sep-attrs': { x1: 0, y1: 64, x2: 150, y2: 64, stroke: '#1e293b', strokeWidth: 1.5, shapeRendering: 'crispEdges' },
 				'.uml-class-name-text': {
 					ref: '.uml-class-name-rect',
-					refY: .5,
-					refX: .5,
+					refX: 0.5,
+					refY: 0.5,
 					textAnchor: 'middle',
 					yAlignment: 'middle',
 					fontWeight: 'bold',
-					fontSize: 14,
-					fill: '#1e3a8a',
+					fontSize: 13,
+					fill: '#0f172a',
 					text: 'Entidad',
 				},
 				'.uml-class-attrs-text': {
+					x: 10,
+					y: 46,
+					textAnchor: 'start',
 					fontSize: 12,
-					fill: '#0f172a',
+					fill: '#1e293b',
 					text: '',
-					textWrap: { width: -20, height: 'auto' },
+					lineHeight: 18,
 					whiteSpace: 'pre-wrap',
 				},
 				'.uml-class-methods-text': {
+					x: 10,
+					y: 78,
+					textAnchor: 'start',
 					fontSize: 12,
-					fill: '#0f172a',
+					fill: '#1e293b',
 					text: '',
-					textWrap: { width: -20, height: 'auto' },
+					lineHeight: 18,
 					whiteSpace: 'pre-wrap',
 				},
 			},
@@ -912,9 +920,7 @@ export class DiagramService {
 		}, {
 			markup: [
 				'<g class="rotatable">',
-				'<g class="scalable">',
-				'<rect class="uml-outer" width="180" height="110"/>',
-				'</g>',
+				'<rect class="uml-outer"/>',
 				'<rect class="uml-class-name-rect"/>',
 				'<line class="sep-name"/>',
 				'<line class="sep-attrs"/>',
@@ -925,14 +931,64 @@ export class DiagramService {
 				'</g>',
 			].join(''),
 		});
-		// Sync textos → attrs
+
+		// Dynamic updateRectangles for custom.UMLClass
 		this.joint.shapes.custom.UMLClass.prototype.updateRectangles = function () {
+			const name = (this.get('name') || '').trim();
+			const rawAttrs = this.get('attributes') || '';
+			const rawMeths = this.get('methods') || '';
+
+			const attrLines: string[] = typeof rawAttrs === 'string'
+				? rawAttrs.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0)
+				: (Array.isArray(rawAttrs) ? rawAttrs.map((a: any) => `${a.name}: ${a.type}`) : []);
+
+			const methLines: string[] = typeof rawMeths === 'string'
+				? rawMeths.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0)
+				: (Array.isArray(rawMeths) ? rawMeths.map((m: any) => `${m.name}(${m.parameters || ''}): ${m.returnType || 'void'}`) : []);
+
+			let maxChars = name.length + 2;
+			attrLines.forEach((l: string) => { if (l.length > maxChars) maxChars = l.length; });
+			methLines.forEach((l: string) => { if (l.length > maxChars) maxChars = l.length; });
+
+			const optimalWidth = Math.max(150, Math.ceil(maxChars * 7.2 + 20));
+			const nameH = 32;
+			const attrsH = attrLines.length > 0 ? (attrLines.length * 18 + 12) : 22;
+			const methsH = methLines.length > 0 ? (methLines.length * 18 + 12) : 22;
+			const totalH = nameH + attrsH + methsH;
+
+			const ySep1 = nameH;
+			const ySep2 = nameH + attrsH;
+
 			this.attr({
-				'.uml-class-name-text': { text: this.get('name') || '' },
-				'.uml-class-attrs-text': { text: this.get('attributes') || '' },
-				'.uml-class-methods-text': { text: this.get('methods') || '' },
+				'.uml-outer': { width: optimalWidth, height: totalH },
+				'.uml-class-name-rect': { width: optimalWidth, height: nameH },
+				'.sep-name': { x1: 0, y1: ySep1, x2: optimalWidth, y2: ySep1 },
+				'.sep-attrs': { x1: 0, y1: ySep2, x2: optimalWidth, y2: ySep2 },
+				'.uml-class-name-text': {
+					ref: '.uml-class-name-rect',
+					refX: 0.5,
+					refY: 0.5,
+					textAnchor: 'middle',
+					yAlignment: 'middle',
+					text: name
+				},
+				'.uml-class-attrs-text': {
+					x: 10,
+					y: nameH + 14,
+					textAnchor: 'start',
+					text: attrLines.join('\n')
+				},
+				'.uml-class-methods-text': {
+					x: 10,
+					y: ySep2 + 14,
+					textAnchor: 'start',
+					text: methLines.join('\n')
+				}
 			});
+
+			this.resize(optimalWidth, totalH);
 		};
+
 		this.joint.shapes.custom.UMLClass.prototype.initialize = function () {
 			this.on('change:name change:attributes change:methods', this.updateRectangles, this);
 			this.updateRectangles();
@@ -971,73 +1027,167 @@ export class DiagramService {
 	getPaper() {
 		return this.paper;
 	}
-	loadFromJson(json: any, isStorageLoad: boolean = false) {
-		if (!this.graph) return;
+	loadFromJson(json: any, isSync: boolean = false) {
+		if (!this.graph || !json) return;
+
+		// Si es sincronizacion autoritativa (PostgreSQL o full_state remoto),
+		// limpiar canvas limpiamente para remover entidades eliminadas
+		if (isSync) {
+			this.isClearingGraph = true;
+			try {
+				this.graph.clear();
+				this.selectedCell = null;
+				this.selectedElement.set(null);
+			} finally {
+				this.isClearingGraph = false;
+			}
+		}
 
 		const idMap: Record<string, string> = {}; 
-		// mapea el id original del JSON -> id real en el canvas
 
 		// 1. Crear (o reusar) todas las clases
-		json.classes.forEach((cls: any) => {
-			const existing = this.graph.getCells().find((c: any) => {
-			return c.isElement?.() && c.get('name') === cls.name;
-			});
-			if (existing && isStorageLoad) {
-			idMap[cls.id] = existing.id; 
-			// 🔹 restaurar posición/tamaño si vino del storage
-			if (cls.position) existing.position(cls.position.x, cls.position.y);
-			if (cls.size) existing.resize(cls.size.width, cls.size.height);
-			} else {
-			const newCls = this.createUmlClass({
-				id: cls.id,
-				name: cls.name,
-				position: cls.position || { x: 100, y: 100 },
-				size: cls.size || { width: 180, height: 110 },
-				attributes: cls.attributes,
-				methods: cls.methods
-			});
+		if (Array.isArray(json.classes)) {
+			json.classes.forEach((cls: any) => {
+				const existing = this.graph.getCells().find((c: any) => {
+					return c.isElement?.() && (c.id === cls.id || c.get('name') === cls.name);
+				});
 
-			idMap[cls.id] = newCls.id;
-			}
-		});
+				const attrText = Array.isArray(cls.attributes)
+					? cls.attributes.map((a: any) => a.name + ': ' + a.type).join('\n')
+					: (cls.attributes || '');
+				const methText = Array.isArray(cls.methods)
+					? cls.methods.map((m: any) => {
+							const params = m.parameters ? '(' + m.parameters + ')' : '()';
+							const ret = m.returnType ? ': ' + m.returnType : '';
+							return m.name + params + ret + ';';
+						}).join('\n')
+					: (cls.methods || '');
+
+				if (existing) {
+					idMap[cls.id] = existing.id; 
+					if (cls.position) existing.position(cls.position.x, cls.position.y);
+					if (cls.name) {
+						existing.set('name', cls.name);
+						existing.attr('.uml-class-name-text/text', cls.name);
+					}
+					existing.set('attributes', attrText);
+					existing.attr('.uml-class-attrs-text/text', attrText);
+					existing.set('methods', methText);
+					existing.attr('.uml-class-methods-text/text', methText);
+
+					this.edition.autoResizeUmlClass(existing, this.paper);
+					this.edition.scheduleAutoResize(existing, this.paper);
+				} else {
+					const newCls = this.createUmlClass({
+						id: cls.id,
+						name: cls.name,
+						position: cls.position || { x: 100, y: 100 },
+						size: cls.size || { width: 160, height: 90 },
+						attributes: cls.attributes,
+						methods: cls.methods
+					}, true);
+
+					idMap[cls.id] = newCls.id;
+					this.edition.autoResizeUmlClass(newCls, this.paper);
+					this.edition.scheduleAutoResize(newCls, this.paper);
+				}
+			});
+		}
 
 		// 2. Crear todas las relaciones
-		json.relationships.forEach((rel: any) => {
-			const srcId = idMap[rel.sourceId] || rel.sourceId;
-			const trgId = idMap[rel.targetId] || rel.targetId;
+		if (Array.isArray(json.relationships)) {
+			json.relationships.forEach((rel: any) => {
+				const srcId = idMap[rel.sourceId] || rel.sourceId;
+				const trgId = idMap[rel.targetId] || rel.targetId;
 
-			const existingLink = this.graph.getLinks().find((l: any) => {
-			return (
-				l.get('source')?.id === srcId &&
-				l.get('target')?.id === trgId &&
-				l.get('relationType') === rel.type
-			);
+				const existingLink = this.graph.getLinks().find((l: any) => {
+					return (
+						l.id === rel.id ||
+						(l.get('source')?.id === srcId &&
+						l.get('target')?.id === trgId &&
+						l.get('relationType') === rel.type)
+					);
+				});
+
+				if (existingLink) {
+					if (rel.labels) {
+						existingLink.set(
+							'labels',
+							rel.labels.map((txt: string, i: number) => ({
+								position: { distance: i === 0 ? 35 : -35, offset: -14 },
+								attrs: { text: { text: txt, fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
+								markup: [{ tagName: 'text', selector: 'text' }]
+							}))
+						);
+					}
+					if (rel.vertices && rel.vertices.length > 0) {
+						existingLink.set('vertices', rel.vertices);
+					}
+					return;
+				}
+
+				const link = this.createTypedRelationship(srcId, trgId, rel.type, true);
+				if (rel.id) link.set('id', rel.id);
+
+				if (rel.labels) {
+					link.set(
+						'labels',
+						rel.labels.map((txt: string, i: number) => ({
+							position: { distance: i === 0 ? 35 : -35, offset: -14 },
+							attrs: { text: { text: txt, fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
+							markup: [{ tagName: 'text', selector: 'text' }]
+						}))
+					);
+				}
+
+				if (rel.vertices && rel.vertices.length > 0) {
+					link.set('vertices', rel.vertices);
+				}
+
+				this.graph.addCell(link, { collab: true });
 			});
+		}
 
-			if (existingLink) return;
+		// Asegurar auto-ajuste metrico consistente de todos los elementos tras montarse en el DOM
+		setTimeout(() => {
+			this.graph.getElements().forEach((el: any) => {
+				this.edition.autoResizeUmlClass(el, this.paper);
+				this.edition.scheduleAutoResize(el, this.paper);
+			});
+		}, 60);
 
-			const link = this.createTypedRelationship(srcId, trgId, rel.type, true);
-			link.set('id', rel.id);
+		if (this.storageKey) {
+			try {
+				localStorage.setItem(this.storageKey, JSON.stringify(json));
+			} catch {}
+		}
+	}
 
-			// 🔹 aplicar labels si vienen
-			if (rel.labels) {
-			link.set(
-				'labels',
-				rel.labels.map((txt: string, i: number) => ({
-				position: { distance: i === 0 ? 20 : -20, offset: -10 },
-				attrs: { text: { text: txt, fill: '#333', fontSize: 12 } },
-				markup: [{ tagName: 'text', selector: 'text' }]
-				}))
-			);
-			}
+	// ========= Abre el editor asistido para la clase seleccionada =========
+	openClassEditor(cellModel?: any): void {
+		const target = cellModel || this.selectedCell;
+		if (target && target.isElement?.()) {
+			this.onOpenClassEditor.emit(target);
+		}
+	}
 
-			// 🔹 restaurar vértices si existen
-			if (rel.vertices && rel.vertices.length > 0) {
-			link.set('vertices', rel.vertices);
-			}
+	// ========= Aplica propiedades normalizadas desde el Modal de Edición =========
+	applyClassProperties(cellId: string, name: string, attributesText: string, methodsText: string): void {
+		const model = this.graph.getCell(cellId);
+		if (!model || !model.isElement?.()) return;
 
-			this.graph.addCell(link);
-		});
+		model.set('name', name);
+		model.set('attributes', attributesText);
+		model.set('methods', methodsText);
+
+		this.edition.autoResizeUmlClass(model, this.paper);
+		this.edition.scheduleAutoResize(model, this.paper);
+
+		this.collab.broadcast({ t: 'edit_text', id: model.id, field: 'name', value: name });
+		this.collab.broadcast({ t: 'edit_text', id: model.id, field: 'attributes', value: attributesText });
+		this.collab.broadcast({ t: 'edit_text', id: model.id, field: 'methods', value: methodsText });
+
+		this.persist(true);
 	}
 
 	// Exporta el estado actual del diagrama a JSON
@@ -1047,7 +1197,7 @@ export class DiagramService {
 	}
 	// Guarda el estado actual del diagrama en localStorage y sincroniza en vivo con PostgreSQL
 	public persist(immediate: boolean = false) {
-		if (!this.graph) return;
+		if (!this.graph || this.isClearingGraph) return;
 		const json = this.exportService.export(this.graph);
 		if (this.storageKey) {
 			localStorage.setItem(this.storageKey, JSON.stringify(json));
@@ -1076,18 +1226,24 @@ export class DiagramService {
 	}
 	closeDiagram(roomId: string) {
 		const snapshot = this.exportToJson();
-		 if (snapshot) {
+		if (snapshot && Array.isArray(snapshot.classes) && snapshot.classes.length > 0) {
 			this.backup.setBackupUml(roomId, snapshot).subscribe({
-			next: () => {
-				console.log('✅ Backup enviado al backend');
-				this.collab.closeSocketRTC();
-				this.graph?.clear();
-				this.selectedCell = null;
-			},
-			error: (err) => console.error('❌ Error enviando backup:', err)
+				next: () => console.log('✅ Backup enviado al backend para sala:', roomId),
+				error: (err) => console.error('❌ Error enviando backup:', err)
 			});
 		}
-		
+
+		// Limpiar grafo de forma segura sin emitir eventos destructivos de guardado
+		this.isClearingGraph = true;
+		try {
+			this.collab.closeSocketRTC();
+			this.graph?.clear();
+			this.selectedCell = null;
+			this.selectedElement.set(null);
+			this.currentRoomId = '';
+		} finally {
+			this.isClearingGraph = false;
+		}
 	}
 	zoomIn() {
 		this.currentScale = Math.min(this.currentScale + this.zoomStep, this.maxScale);

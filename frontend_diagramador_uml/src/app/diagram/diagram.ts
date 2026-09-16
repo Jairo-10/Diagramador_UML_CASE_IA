@@ -1,7 +1,8 @@
-import { AfterViewInit, Component, ElementRef, HostListener, Inject, NgZone, PLATFORM_ID, ViewChild } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { AfterViewInit, Component, ElementRef, HostListener, Inject, NgZone, OnDestroy, PLATFORM_ID, ViewChild } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { CdkDragEnd, CdkDropListGroup, CdkDropList } from '@angular/cdk/drag-drop';
 import { SidePanel } from "../side-panel/side-panel";
+import { ClassEditorModal } from '../components/diagram/class-editor-modal/class-editor-modal';
 import { DiagramService } from '../../services/diagram/diagram.service';
 import { FallbackService } from '../../services/diagram/fallback.service';
 import { RelationshipService } from '../../services/diagram/relationship.service';
@@ -17,18 +18,19 @@ import { ActivatedRoute } from '@angular/router';
   standalone: true,
   templateUrl: './diagram.html',
   styleUrls: ['./diagram.css'],
-  imports: [SidePanel, CdkDropListGroup, CdkDropList]
+  imports: [CommonModule, SidePanel, CdkDropListGroup, CdkDropList, ClassEditorModal]
 })
-export class Diagram implements AfterViewInit {
+export class Diagram implements AfterViewInit, OnDestroy {
   @ViewChild('paperContainer', { static: true }) paperContainer!: ElementRef;
   @ViewChild(SidePanel) sidePanel!: SidePanel;
+  @ViewChild(ClassEditorModal) classEditorModal!: ClassEditorModal;
 
   private lastMousePos: { x: number; y: number } | null = null;
   
   constructor(
     @Inject(PLATFORM_ID) private platformId: Object,
     private ngZone: NgZone,
-    private diagramService: DiagramService,
+    public diagramService: DiagramService,
     private fallbackService: FallbackService,
     private relationshipService: RelationshipService,
     private exportService: DiagramExportService,
@@ -78,6 +80,12 @@ export class Diagram implements AfterViewInit {
         }
       });
       
+      this.diagramService.onOpenClassEditor.subscribe((model: any) => {
+        if (this.classEditorModal) {
+          this.classEditorModal.openForCell(model);
+        }
+      });
+
       this.umlValidation.connect((result) => {
         this.sidePanel.updateValidationResult(result);
       });
@@ -95,6 +103,18 @@ export class Diagram implements AfterViewInit {
         this.lastMousePos = null;
       });
     }
+  }
+
+  ngOnDestroy(): void {
+    this.diagramService.persist(true);
+  }
+
+  onSaveClassProperties(data: { cellId: string; name: string; attributesText: string; methodsText: string }): void {
+    this.diagramService.applyClassProperties(data.cellId, data.name, data.attributesText, data.methodsText);
+  }
+
+  openEditorForSelected(): void {
+    this.diagramService.openClassEditor();
   }
 
   saveDiagram(): void {
@@ -126,6 +146,12 @@ export class Diagram implements AfterViewInit {
     const target = event.target as HTMLElement;
     // Protección estricta: Si el foco está en un input, textarea o contenido editable, NO interceptar
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
+
+    if (event.key === 'F2') {
+      event.preventDefault();
+      this.diagramService.openClassEditor();
       return;
     }
 

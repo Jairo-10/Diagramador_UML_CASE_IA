@@ -9,6 +9,6 @@ export interface DiagramApi {
   createTypedRelationship?(sourceId: string, targetId: string, type: string, remote?: boolean): any;
   getEdition?(): any;
   getPaper?(): any;
-  loadFromJson(json: any, isStorageLoad?: boolean): void;
+  loadFromJson(json: any, isSync?: boolean): void;
   exportToJson(): any;
 }

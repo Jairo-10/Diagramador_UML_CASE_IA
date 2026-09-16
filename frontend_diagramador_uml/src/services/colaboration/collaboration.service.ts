@@ -48,19 +48,7 @@ export class CollaborationService {
 
     // 2. Respaldo ágil: si en 800ms el grafo local sigue vacío y no hay estado en localStorage,
     // asegurar que cargue desde la base de datos PostgreSQL
-    setTimeout(() => {
-      const hasLocalRecord = typeof window !== 'undefined' && localStorage.getItem(`diagram-${roomId}`);
-      if (!hasLocalRecord && !this.api?.getGraph()?.getCells()?.length) {
-        this.backup.getBackup(roomId).subscribe({
-          next: (snapshot) => {
-            if (snapshot && Array.isArray(snapshot.classes) && snapshot.classes.length > 0) {
-              this.api!.loadFromJson(snapshot, true);
-            }
-          },
-          error: (err) => console.log('[Collab] Sala limpia o sin clases en BD:', err)
-        });
-      }
-    }, 800);
+    // El respaldo autoritativo se gestiona centralizadamente en diagram.service
   }
 
   broadcast(op: Op) {
@@ -98,7 +86,8 @@ export class CollaborationService {
             console.warn('[Collab] API no soporta getEdition');
             break;
           }
-          // Forzar auto-resize en receptor
+          // Forzar auto-resize en receptor de forma inmediata y diferida
+          this.api?.getEdition()?.autoResizeUmlClass(m, this.api!.getPaper?.() ?? null);
           this.api?.getEdition()?.scheduleAutoResize(m, this.api!.getPaper?.() ?? null);
           break;
         }
@@ -227,7 +216,7 @@ export class CollaborationService {
 
         case 'full_state': {
           if (this.api && op.payload && Array.isArray(op.payload.classes) && op.payload.classes.length > 0) {
-            this.api.loadFromJson(op.payload);
+            this.api.loadFromJson(op.payload, true);
           }
           break;
         }

@@ -116,7 +116,8 @@ export class SidePanel {
   }
 
   goHome(): void {
-    this.diagramService.clearStorage();
+    // Guardar estado actual antes de salir para que persista en PostgreSQL y localStorage
+    this.diagramService.persist(true);
     this.diagramService.closeDiagram(this.roomId!);
     this.router.navigate(['/']);
   }

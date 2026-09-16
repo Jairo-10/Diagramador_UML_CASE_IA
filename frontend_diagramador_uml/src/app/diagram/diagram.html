@@ -16,6 +16,19 @@
         <span class="text-[10px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">En Línea</span>
       </div>
 
+      <!-- Chip Central: Acciones de la Clase Seleccionada -->
+      <div *ngIf="diagramService.selectedElement() as sel" 
+        class="pointer-events-auto flex items-center gap-2 px-3 py-1 rounded-xl bg-white/95 border border-indigo-300 backdrop-blur-md shadow-xl text-slate-800 animate-fadeIn">
+        <span class="w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+        <span class="text-xs font-bold font-mono text-indigo-950">{{ sel.get('name') || 'Entidad' }}</span>
+        <button 
+          (click)="openEditorForSelected()"
+          title="Abrir editor guiado de atributos y métodos (F2 o doble clic)"
+          class="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-sm cursor-pointer">
+          <span>✏️ Editar Propiedades</span>
+        </button>
+      </div>
+
       <!-- Botón Superior Derecho: Abrir Panel de Exportación & Auditoría -->
       <button 
         (click)="sidePanel.toggleRightDrawer()"
@@ -63,5 +76,8 @@
     </div>
 
   </div>
+
+  <!-- MODAL ASISTIDO DE PROPIEDADES DE CLASE UML (DROPDOWNS & VISIBILIDAD) -->
+  <app-class-editor-modal (save)="onSaveClassProperties($event)"></app-class-editor-modal>
 
 </div>
