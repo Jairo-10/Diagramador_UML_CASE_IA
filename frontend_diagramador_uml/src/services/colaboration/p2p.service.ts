@@ -21,12 +21,9 @@ export class P2PService {
 
   private iceServers: RTCIceServer[] = [
     { urls: ['stun:stun.l.google.com:19302'] },
-    // TURN opcional si sales a internet:
-    // { urls: ['turn:yourturn.com:3478'], username: 'user', credential: 'pass' }
   ];
 
   private newPeer(remoteId: string, isInitiator: boolean) {
-    //console.log(`[P2P] Creando peer con ${remoteId}, initiator=${isInitiator}`);
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const peer: Peer = { pc };
     this.peers.set(remoteId, peer);
@@ -43,7 +40,6 @@ export class P2PService {
       pc.createOffer().then(offer => {
         pc.setLocalDescription(offer);
         this.signaling.sendSignal(remoteId, { type: 'offer', sdp: offer });
-        //console.log(`[P2P] Offer enviada a ${remoteId}`);
       });
     } else {
       pc.ondatachannel = (ev) => this.attachDataChannel(remoteId, ev.channel);
@@ -62,7 +58,6 @@ export class P2PService {
     dc.onopen = () => {
       if (this.onData) {
         this.onData(remoteId, { t: 'request_full_state' } as any);
-        
       }
     };
     dc.onmessage = (ev) => {
@@ -74,29 +69,39 @@ export class P2PService {
     };
   }
 
-
   private async handleSignaling(msg: any) {
-
     if (msg.type === 'presence') {
       if (msg.peer && !this.localId) {
         this.localId = msg.peer;
-        //console.log('[P2P] Mi localId:', this.localId);
       }
       if (msg.action === 'join') {
-        //console.log(`[P2P] PRESENCE join de ${msg.peer}`);
         // Aviso a la sala que estoy disponible
         this.signaling.broadcast({ type: 'announce' });
       }
       return;
     }
 
-    if (msg.type === 'broadcast' && msg.payload?.type === 'announce') {
-      const remoteId = msg.from;
-      if (this.peers.has(remoteId)) return;
+    if (msg.type === 'broadcast') {
+      // 1. Handshake de presencia P2P
+      if (msg.payload?.type === 'announce') {
+        const remoteId = msg.from;
+        if (this.peers.has(remoteId)) return;
 
-      // regla: el que tiene ID menor inicia
-      const isInitiator = this.localId < remoteId;
-      this.newPeer(remoteId, isInitiator);
+        // regla: el que tiene ID menor inicia WebRTC
+        const isInitiator = this.localId < remoteId;
+        this.newPeer(remoteId, isInitiator);
+        return;
+      }
+
+      // 2. Sincronización híbrida: Si el broadcast contiene una operación enviada por WebSocket
+      if (msg.from !== this.localId && this.onData) {
+        const peer = this.peers.get(msg.from);
+        const hasOpenDc = peer?.dc?.readyState === 'open';
+        // Si aún no tenemos canal WebRTC abierto con este peer, procesar de inmediato por WebSocket
+        if (!hasOpenDc) {
+          this.onData(msg.from, msg.payload);
+        }
+      }
       return;
     }
 
@@ -108,12 +113,10 @@ export class P2PService {
       const payload = msg.payload;
 
       if (payload.type === 'offer') {
-        //console.log(`[P2P] Offer recibido de ${remoteId}`);
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         this.signaling.sendSignal(remoteId, { type: 'answer', sdp: answer });
-        //console.log(`[P2P] Answer enviada a ${remoteId}`);
       } else if (payload.type === 'answer') {
         if (pc.signalingState !== 'stable') {
           await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
@@ -121,7 +124,6 @@ export class P2PService {
       } else if (payload.type === 'ice' && payload.candidate) {
         try {
           await pc.addIceCandidate(payload.candidate);
-          //console.log(`[P2P] ICE aplicado de ${remoteId}`);
         } catch (e) {
           console.warn('[P2P] Error aplicando ICE:', e);
         }
@@ -130,13 +132,21 @@ export class P2PService {
   }
 
   sendToAll(data: any) {
-  const json = JSON.stringify(data);
-  for (const [id, p] of this.peers) {
-    if (p.dc?.readyState === 'open') {
-      p.dc.send(json);
+    const json = JSON.stringify(data);
+    let openPeersCount = 0;
+    for (const [id, p] of this.peers) {
+      if (p.dc?.readyState === 'open') {
+        p.dc.send(json);
+        openPeersCount++;
+      }
+    }
+
+    // Fallback híbrido: Si aún no hay DataChannels WebRTC abiertos o mientras se establece la conexión,
+    // propagar a través del WebSocket del servidor (Django Channels) para entrega 100% garantizada.
+    if (openPeersCount === 0) {
+      this.signaling.broadcast(data);
     }
   }
-}
 
   closeSocketRTC() {
     // Cerrar WebRTC peers
@@ -154,5 +164,4 @@ export class P2PService {
     // Cerrar signaling
     this.signaling.close();
   }
-
 }

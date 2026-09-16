@@ -23,6 +23,7 @@ type Op =
 export class CollaborationService {
   private api?: DiagramApi;
   private ready = false;
+
   constructor(
     private p2p: P2PService,
     private backup: BackupService
@@ -39,22 +40,27 @@ export class CollaborationService {
     };
     this.p2p.init(roomId);
     this.ready = true;
-    //this.broadcast({ t: 'request_full_state' });
+
+    // 1. Solicitar inmediatamente el estado completo a otros pares activos en la sala
+    setTimeout(() => {
+      this.broadcast({ t: 'request_full_state' });
+    }, 200);
+
+    // 2. Respaldo ágil: si en 800ms el grafo local sigue vacío y no hay estado en localStorage,
+    // asegurar que cargue desde la base de datos PostgreSQL
     setTimeout(() => {
       const hasLocalRecord = typeof window !== 'undefined' && localStorage.getItem(`diagram-${roomId}`);
-      // Solo cargar de la base de datos si esta máquina NO tiene un guardado local previo
       if (!hasLocalRecord && !this.api?.getGraph()?.getCells()?.length) {
-        console.log('[Collab] Nadie respondió y no hay estado local, cargando backup de BD...');
         this.backup.getBackup(roomId).subscribe({
           next: (snapshot) => {
             if (snapshot && Array.isArray(snapshot.classes) && snapshot.classes.length > 0) {
               this.api!.loadFromJson(snapshot, true);
             }
           },
-          error: (err) => console.error('[Collab] Error obteniendo backup', err)
+          error: (err) => console.log('[Collab] Sala limpia o sin clases en BD:', err)
         });
       }
-    }, 3000);
+    }, 800);
   }
 
   broadcast(op: Op) {
@@ -92,11 +98,10 @@ export class CollaborationService {
             console.warn('[Collab] API no soporta getEdition');
             break;
           }
-          // 🔴 Forzar auto-resize en receptor
+          // Forzar auto-resize en receptor
           this.api?.getEdition()?.scheduleAutoResize(m, this.api!.getPaper?.() ?? null);
           break;
         }
-
 
         case 'move': {
           const m = graph.getCell(op.id);
@@ -147,12 +152,10 @@ export class CollaborationService {
           break;
         }
 
-
         case 'add_label': {
           const link = graph.getCell(op.linkId);
           if (!link) break;
 
-          // aseguramos markup para compatibilidad
           const label = {
             ...op.label,
             markup: op.label.markup || [{ tagName: 'text', selector: 'text' }]
@@ -207,27 +210,27 @@ export class CollaborationService {
           break;
         }
 
-
         case 'delete': {
           const m = graph.getCell(op.id);
-          if (m) m.remove({ collab: true }); // <- importante para no re-emitir
+          if (m) m.remove({ collab: true });
           break;
         }
 
         case 'request_full_state': {
           const snapshot = this.api!.exportToJson();
-          this.broadcast({ t: 'full_state', payload: snapshot });
-          break;
-        }
-
-        case 'full_state': {
-          if (this.api) {
-            this.api!.loadFromJson(op.payload);
+          // Solo responder si tenemos clases para no sobreescribir con lienzo vacío
+          if (snapshot && Array.isArray(snapshot.classes) && snapshot.classes.length > 0) {
+            this.broadcast({ t: 'full_state', payload: snapshot });
           }
           break;
         }
 
-
+        case 'full_state': {
+          if (this.api && op.payload && Array.isArray(op.payload.classes) && op.payload.classes.length > 0) {
+            this.api.loadFromJson(op.payload);
+          }
+          break;
+        }
       }
     } catch (err) {
       console.error('[Collab] applyRemoteOp error', op, err);

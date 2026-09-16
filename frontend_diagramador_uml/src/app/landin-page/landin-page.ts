@@ -45,6 +45,11 @@ export class LandinPage implements OnInit {
 
   crearNuevoLienzo(): void {
     const roomId = uuid();
+    // Registrar de inmediato la sala en PostgreSQL inicializada limpia
+    this.backupService.setBackupUml(roomId, { classes: [], relationships: [] }).subscribe({
+      next: () => console.log('Sala registrada en PostgreSQL:', roomId),
+      error: (e) => console.warn('Aviso creación inicial de sala:', e)
+    });
     this.router.navigate(['/diagram', roomId]);
   }
 
@@ -54,24 +59,14 @@ export class LandinPage implements OnInit {
 
     if (!code) return;
 
-    // 1. Validar que el código tenga formato UUID válido
+    // 1. Validar formato UUID
     if (!this.isValidUUID(code)) {
-      this.errorMessage = 'Código inválido (formato UUID incorrecto).';
+      this.errorMessage = 'Código inválido (debe ser un formato UUID válido).';
       return;
     }
 
-    // 2. Verificar en el servidor si la sala existe realmente
-    this.isVerifying = true;
-    this.backupService.getBackup(code).subscribe({
-      next: () => {
-        this.isVerifying = false;
-        this.router.navigate(['/diagram', code]);
-      },
-      error: () => {
-        this.isVerifying = false;
-        this.errorMessage = 'La sala no existe. Verifica el código.';
-      }
-    });
+    // 2. Navegar directamente: la hidratación ocurrirá de inmediato por WebSockets y BD
+    this.router.navigate(['/diagram', code]);
   }
 
   abrirSala(roomId: string): void {
