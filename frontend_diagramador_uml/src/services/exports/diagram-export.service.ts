@@ -72,24 +72,37 @@ export class DiagramExportService {
 
   private parseAttributesFromText(text: string): { name: string; type: string }[] {
     if (!text) return [];
-    return text.split('\n').map(line => {
-      const [name, type] = line.split(':').map(s => s.trim());
-      return { name: name || '', type: type || '' };
-    });
+    return text.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .map(line => {
+        // Remover visibilidades formales UML (+, -, #, ~) al inicio del nombre
+        const cleanLine = line.replace(/^[\+\-\#\~]\s*/, '').trim();
+        const parts = cleanLine.split(':');
+        const name = (parts[0] || '').trim();
+        const type = (parts[1] || 'string').trim();
+        return { name, type };
+      })
+      .filter(attr => attr.name.length > 0);
   }
 
   private parseMethodsFromText(text: string): { name: string; parameters?: string; returnType?: string }[] {
     if (!text) return [];
-    return text.split('\n').map(line => {
-      const match = line.match(/^(\w+)\(([^)]*)\)(?::\s*(\w+))?/);
-      if (match) {
-        return {
-          name: match[1],
-          parameters: match[2] || '',
-          returnType: match[3] || ''
-        };
-      }
-      return { name: line.trim() };
-    });
+    return text.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0)
+      .map(line => {
+        const cleanLine = line.replace(/^[\+\-\#\~]\s*/, '').replace(/;$/, '').trim();
+        const match = cleanLine.match(/^(\w+)\(([^)]*)\)(?::\s*(\w+))?/);
+        if (match) {
+          return {
+            name: match[1],
+            parameters: match[2] || '',
+            returnType: match[3] || 'void'
+          };
+        }
+        return { name: cleanLine };
+      })
+      .filter(m => m.name.length > 0);
   }
 }

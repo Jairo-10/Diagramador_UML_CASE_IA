@@ -123,6 +123,12 @@ export class Diagram implements AfterViewInit {
 
   @HostListener('document:keydown', ['$event'])
   handleEscape(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement;
+    // Protección estricta: Si el foco está en un input, textarea o contenido editable, NO interceptar
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+      return;
+    }
+
     if (event.key === 'Delete' || event.key === 'Backspace') {
       this.diagramService.deleteSelected();
     }

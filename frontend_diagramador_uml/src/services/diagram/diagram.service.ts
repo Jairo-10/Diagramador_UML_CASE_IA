@@ -84,37 +84,7 @@ export class DiagramService {
 			 ***************************************************************************************************/
 			let clipboard: any = null;
 
-			paperElement.addEventListener('keydown', (evt: KeyboardEvent) => {
-				if (!this.selectedCell) return;
-				if (evt.ctrlKey && evt.key === 'c') {
-					// Copiar
-					clipboard = this.copyUmlClass(this.selectedCell);
-					console.log('Clase copiada');
-					evt.preventDefault();
-				}
-				if (evt.ctrlKey && evt.key === 'v') {
-					// Pegar
-					if (clipboard) {
-						this.pasteUmlClass(clipboard);
-						console.log('Clase pegada');
-					}
-					evt.preventDefault();
-				}
-				if (evt.ctrlKey && evt.key === 'x') {
-					// Cortar
-					clipboard = this.copyUmlClass(this.selectedCell);
-					this.deleteSelected();
-					console.log('Clase cortada');
-					evt.preventDefault();
-				}
-				if (evt.ctrlKey && evt.key === 'd') {
-					// Duplicar
-					const clone = this.copyUmlClass(this.selectedCell);
-					this.pasteUmlClass(clone);
-					console.log('Clase duplicada');
-					evt.preventDefault();
-				}
-			});
+			// Los atajos de teclado globales se delegan y controlan de forma centralizada en diagram.ts con proteccion de inputs
 
 			// Para que el canvas reciba los eventos de teclado
 			paperElement.tabIndex = 0;
@@ -518,6 +488,7 @@ export class DiagramService {
 						this.collab.broadcast({ t: 'delete', id });
 						const umlJson = this.exportService.export(this.graph);
 						this.umlValidationService.validateModel(umlJson);
+						this.persist(true);
 					}
 				});
 				const toolsView = new this.joint.dia.ToolsView({
@@ -546,7 +517,6 @@ export class DiagramService {
 				createRelationship: (sourceId, targetId, remote = false) =>
 				this.createRelationship(sourceId, targetId, remote),
 
-				// 👇 añade esto
 				createTypedRelationship: (sourceId: string, targetId: string, type: string, remote = false) =>
 				this.createTypedRelationship(sourceId, targetId, type, remote),
 

@@ -23,8 +23,11 @@ export class SqlExportService {
 
   exportToSql(umlJson: any, dbName: string = 'uml_database'): string {
     let sql = '';
-    sql += `CREATE DATABASE ${dbName};\n`;
-    sql += `USE ${dbName};\n\n`;
+    sql += `-- ==========================================================\n`;
+    sql += `-- Script DDL generado automáticamente por Nexus Studio UML\n`;
+    sql += `-- Motor: PostgreSQL 17\n`;
+    sql += `-- Base de datos: ${dbName}\n`;
+    sql += `-- ==========================================================\n\n`;
 
     // ====== TABLAS ======
     for (const cls of umlJson.classes) {
