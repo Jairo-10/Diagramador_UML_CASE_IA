@@ -24,6 +24,9 @@ import com.fasterxml.jackson.annotation.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
+{{#parentClass}}
+@lombok.EqualsAndHashCode(callSuper = false)
+{{/parentClass}}
 @JsonIdentityInfo(
     generator = ObjectIdGenerators.PropertyGenerator.class,
     property = "id",
@@ -62,6 +65,7 @@ public class {{EntityName}}{{#parentClass}} extends {{parentClass}}{{/parentClas
 {{#oneToMany}}
     @OneToMany(mappedBy = "{{mappedBy}}", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonIgnoreProperties(value = {"{{mappedBy}}", "hibernateLazyInitializer", "handler"}, allowSetters = true)
+    @lombok.Builder.Default
     private List<{{TargetEntity}}> {{collectionField}} = new ArrayList<>();
 {{/oneToMany}}
 

@@ -432,6 +432,13 @@ public class PostmanCollectionGenerator {
                 boolean sourceIsMany = sourceCard.contains("*");
                 boolean targetIsMany = targetCard.contains("*");
 
+                // Soporte para relación recursiva en Postman
+                if (sourceName.equals(targetName) && c.getName().equals(sourceName)) {
+                    String fieldName = NamingUtil.toField(targetName) + "PadreId";
+                    body.set(fieldName, generateSampleValue("Long", fieldName));
+                    continue;
+                }
+
                 if (c.getName().equals(sourceName) &&
                         ("association".equals(rel.getType()) ||
                                 "aggregation".equals(rel.getType()) ||

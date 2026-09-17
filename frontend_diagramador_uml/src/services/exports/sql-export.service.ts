@@ -32,20 +32,17 @@ export class SqlExportService {
     // ====== TABLAS ======
     for (const cls of umlJson.classes) {
       // Verificar si la clase es hija en una relación de herencia
-      const generalizationRel = umlJson.relationships.find((rel: any) => rel.type === 'generalization' && rel.sourceId === cls.id);
+      const generalizationRel = umlJson.relationships?.find((rel: any) => rel.type === 'generalization' && rel.sourceId === cls.id);
       sql += `CREATE TABLE ${cls.name} (\n`;
       const columns: string[] = [];
+
       if (generalizationRel) {
-        // Es clase hija: la PK es la referencia al padre, con mismo nombre y tipo
+        // Es clase hija: la PK es la referencia al padre, con mismo nombre y tipo exacto
         const parent = umlJson.classes.find((c: any) => c.id === generalizationRel.targetId);
-        let parentPkName = 'id';
-        let parentPkType = 'UUID';
-        if (parent.attributes && parent.attributes.length > 0) {
-          const firstAttr = parent.attributes[0];
-          parentPkName = firstAttr.name;
-          parentPkType = this.typeMap[firstAttr.type] || 'VARCHAR(255)';
-        }
+        const parentPkName = this.getPrimaryKey(parent, umlJson);
+        const parentPkType = this.getPrimaryKeyType(parent, umlJson);
         columns.push(`  ${parentPkName} ${parentPkType} PRIMARY KEY`);
+
         if (cls.attributes && cls.attributes.length > 0) {
           cls.attributes.forEach((attr: any) => {
             if (attr.name !== parentPkName) {
@@ -55,14 +52,14 @@ export class SqlExportService {
           });
         }
       } else if (!cls.attributes || cls.attributes.length === 0) {
-        columns.push(`  id UUID PRIMARY KEY`);
+        columns.push(`  id VARCHAR(255) PRIMARY KEY`);
       } else {
         cls.attributes.forEach((attr: any, index: number) => {
           const sqlType = this.typeMap[attr.type] || 'VARCHAR(255)';
           let colDef = `  ${attr.name} ${sqlType}`;
           if (index === 0) {
             if (this.invalidPkTypes.has(sqlType)) {
-              columns.push(`  id UUID PRIMARY KEY`);
+              columns.push(`  id VARCHAR(255) PRIMARY KEY`);
               columns.push(colDef);
             } else {
               colDef += ' PRIMARY KEY';
@@ -77,24 +74,40 @@ export class SqlExportService {
     }
 
     // ====== RELACIONES ======
-    for (const rel of umlJson.relationships) {
+    for (const rel of (umlJson.relationships || [])) {
       const source = umlJson.classes.find((c: any) => c.id === rel.sourceId);
       const target = umlJson.classes.find((c: any) => c.id === rel.targetId);
       if (!source || !target) continue;
+
+      // Herencia (Generalización): Crear la FK de la tabla hija a la tabla padre con ON DELETE CASCADE
+      if (rel.type === 'generalization') {
+        const child = source;
+        const parent = target;
+        const childPk = this.getPrimaryKey(child, umlJson);
+        const parentPk = this.getPrimaryKey(parent, umlJson);
+        sql += `ALTER TABLE ${child.name}\n`;
+        sql += `  ADD CONSTRAINT fk_${child.name.toLowerCase()}_${parent.name.toLowerCase()} FOREIGN KEY (${childPk}) REFERENCES ${parent.name}(${parentPk}) ON DELETE CASCADE ON UPDATE CASCADE;\n\n`;
+        continue;
+      }
 
       // Multiplicidad
       const multSource = rel.labels?.[0] || '1';
       const multTarget = rel.labels?.[1] || '1';
 
-      // N:M → tabla intermedia
+      // N:M ➔ tabla intermedia
       if (multSource.includes('*') && multTarget.includes('*')) {
         const joinTable = `${source.name}_${target.name}`;
+        const sourcePkName = this.getPrimaryKey(source, umlJson);
+        const targetPkName = this.getPrimaryKey(target, umlJson);
+        const sourcePkType = this.getPrimaryKeyType(source, umlJson);
+        const targetPkType = this.getPrimaryKeyType(target, umlJson);
+
         sql += `CREATE TABLE ${joinTable} (\n`;
-        sql += `  ${source.name.toLowerCase()}_id UUID NOT NULL,\n`;
-        sql += `  ${target.name.toLowerCase()}_id UUID NOT NULL,\n`;
+        sql += `  ${source.name.toLowerCase()}_id ${sourcePkType} NOT NULL,\n`;
+        sql += `  ${target.name.toLowerCase()}_id ${targetPkType} NOT NULL,\n`;
         sql += `  PRIMARY KEY (${source.name.toLowerCase()}_id, ${target.name.toLowerCase()}_id),\n`;
-        sql += `  CONSTRAINT fk_${joinTable}_${source.name.toLowerCase()} FOREIGN KEY (${source.name.toLowerCase()}_id) REFERENCES ${source.name}(${this.getPrimaryKey(source)}) ON DELETE CASCADE ON UPDATE CASCADE,\n`;
-        sql += `  CONSTRAINT fk_${joinTable}_${target.name.toLowerCase()} FOREIGN KEY (${target.name.toLowerCase()}_id) REFERENCES ${target.name}(${this.getPrimaryKey(target)}) ON DELETE CASCADE ON UPDATE CASCADE\n`;
+        sql += `  CONSTRAINT fk_${joinTable}_${source.name.toLowerCase()} FOREIGN KEY (${source.name.toLowerCase()}_id) REFERENCES ${source.name}(${sourcePkName}) ON DELETE CASCADE ON UPDATE CASCADE,\n`;
+        sql += `  CONSTRAINT fk_${joinTable}_${target.name.toLowerCase()} FOREIGN KEY (${target.name.toLowerCase()}_id) REFERENCES ${target.name}(${targetPkName}) ON DELETE CASCADE ON UPDATE CASCADE\n`;
         sql += `);\n\n`;
         continue;
       }
@@ -119,13 +132,13 @@ export class SqlExportService {
           notNull = '';
         } else {
           if (multSource.includes('*') && !multTarget.includes('*')) {
-            // source: muchos, target: uno → FK en source
+            // source: muchos, target: uno ➔ FK en source
             fkTable = source;
             refTable = target;
             fkName = `fk_${source.name.toLowerCase()}_${target.name.toLowerCase()}`;
             column = `${target.name.toLowerCase()}_id`;
           } else if (!multSource.includes('*') && multTarget.includes('*')) {
-            // source: uno, target: muchos → FK en target
+            // source: uno, target: muchos ➔ FK en target
             fkTable = target;
             refTable = source;
             fkName = `fk_${target.name.toLowerCase()}_${source.name.toLowerCase()}`;
@@ -147,9 +160,13 @@ export class SqlExportService {
             onDelete = 'SET NULL';
           }
         }
+
+        const refPkName = this.getPrimaryKey(refTable, umlJson);
+        const refPkType = this.getPrimaryKeyType(refTable, umlJson);
+
         sql += `ALTER TABLE ${fkTable.name}\n`;
-        sql += `  ADD COLUMN ${column} UUID${notNull},\n`;
-        sql += `  ADD CONSTRAINT ${fkName} FOREIGN KEY (${column}) REFERENCES ${refTable.name}(${this.getPrimaryKey(refTable)}) ON DELETE ${onDelete} ON UPDATE CASCADE;\n\n`;
+        sql += `  ADD COLUMN ${column} ${refPkType}${notNull},\n`;
+        sql += `  ADD CONSTRAINT ${fkName} FOREIGN KEY (${column}) REFERENCES ${refTable.name}(${refPkName}) ON DELETE ${onDelete} ON UPDATE CASCADE;\n\n`;
         continue;
       }
     }
@@ -157,13 +174,36 @@ export class SqlExportService {
     return sql.trim();
   }
 
-  private getPrimaryKey(cls: any): string {
-    if (!cls.attributes || cls.attributes.length === 0) return 'id';
+  private getPrimaryKey(cls: any, umlJson?: any): string {
+    if (umlJson) {
+      const genRel = umlJson.relationships?.find((rel: any) => rel.type === 'generalization' && rel.sourceId === cls?.id);
+      if (genRel) {
+        const parent = umlJson.classes?.find((c: any) => c.id === genRel.targetId);
+        if (parent) return this.getPrimaryKey(parent, umlJson);
+      }
+    }
+    if (!cls || !cls.attributes || cls.attributes.length === 0) return 'id';
 
     const firstAttr = cls.attributes[0];
     const sqlType = this.typeMap[firstAttr.type] || 'VARCHAR(255)';
 
     return this.invalidPkTypes.has(sqlType) ? 'id' : firstAttr.name;
+  }
+
+  private getPrimaryKeyType(cls: any, umlJson?: any): string {
+    if (umlJson) {
+      const genRel = umlJson.relationships?.find((rel: any) => rel.type === 'generalization' && rel.sourceId === cls?.id);
+      if (genRel) {
+        const parent = umlJson.classes?.find((c: any) => c.id === genRel.targetId);
+        if (parent) return this.getPrimaryKeyType(parent, umlJson);
+      }
+    }
+    if (!cls || !cls.attributes || cls.attributes.length === 0) return 'VARCHAR(255)';
+
+    const firstAttr = cls.attributes[0];
+    const sqlType = this.typeMap[firstAttr.type] || 'VARCHAR(255)';
+
+    return this.invalidPkTypes.has(sqlType) ? 'VARCHAR(255)' : sqlType;
   }
 
   downloadSql(umlJson: any, fileName: string = 'diagram.sql'): void {

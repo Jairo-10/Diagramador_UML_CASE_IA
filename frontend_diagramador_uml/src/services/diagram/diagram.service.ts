@@ -651,12 +651,12 @@ export class DiagramService {
 			labels: [
 				{
 					position: { distance: 35,  offset: -14 },
-					attrs: { text: { text: '0..1', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
+					attrs: { text: { text: '1..1', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
 					markup: [{ tagName: 'text', selector: 'text' }]
 				},
 				{
 					position: { distance: -35, offset: -14 },
-					attrs: { text: { text: '1..*', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
+					attrs: { text: { text: '0..*', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
 					markup: [{ tagName: 'text', selector: 'text' }]
 				}
 			]
@@ -763,12 +763,12 @@ export class DiagramService {
 			link.set('labels', [
 				{
 					position: { distance: isSelf ? 25 : 35, offset: isSelf ? -18 : -14 },
-					attrs: { text: { text: type === 'composition' ? '1..1' : '0..1', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
+					attrs: { text: { text: isSelf ? '0..1' : '1..1', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
 					markup: [{ tagName: 'text', selector: 'text' }]
 				},
 				{
 					position: { distance: isSelf ? -25 : -35, offset: isSelf ? -18 : -14 },
-					attrs: { text: { text: '1..*', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
+					attrs: { text: { text: type === 'composition' ? '1..*' : '0..*', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
 					markup: [{ tagName: 'text', selector: 'text' }]
 				}
 			]);
@@ -1369,23 +1369,68 @@ export class DiagramService {
 	}
 	exportToImage(fileName: string = 'diagram.png') {
 		if (!this.paper) {
-			console.error('❌ Paper no inicializado');
+			console.error('Paper no inicializado');
+			return;
+		}
+
+		const bbox = this.paper.getContentBBox();
+		if (!bbox || bbox.width <= 0 || bbox.height <= 0) {
+			console.warn('Diagrama vacío, nada que exportar');
 			return;
 		}
 
 		// Clonar el nodo SVG actual
 		const svgElement = this.paper.svg.cloneNode(true) as SVGSVGElement;
 
-		// ❌ Eliminar elementos no deseados (handles, herramientas, puertos)
+		// Eliminar elementos interactivos no deseados (handles, herramientas, puertos)
 		svgElement.querySelectorAll(
 			'.marker-vertices, .marker-arrowheads, .link-tools, .tool, .connection-wrap'
 		).forEach(el => el.remove());
 
-		// Ajustar tamaño al contenido
-		const bbox = this.paper.getContentBBox();
-		svgElement.setAttribute("width", `${bbox.width}`);
-		svgElement.setAttribute("height", `${bbox.height}`);
-		svgElement.setAttribute("viewBox", `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
+		// CRÍTICO: Resetear la transformación de zoom/pan del viewport en el clon
+		// para que las coordenadas de los elementos coincidan 1:1 con el modelo unscaled
+		const viewport = svgElement.querySelector('.joint-viewport') as SVGGElement;
+		if (viewport) {
+			viewport.removeAttribute('transform');
+		}
+
+		// Margen / padding de respiración para que los bordes, sombras y multiplicidades no se corten
+		const padding = 50;
+		const x = Math.round(bbox.x - padding);
+		const y = Math.round(bbox.y - padding);
+		const width = Math.round(bbox.width + padding * 2);
+		const height = Math.round(bbox.height + padding * 2);
+
+		svgElement.setAttribute("width", `${width}`);
+		svgElement.setAttribute("height", `${height}`);
+		svgElement.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
+
+		// Añadir un fondo blanco sólido directamente en el SVG
+		const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+		bgRect.setAttribute("x", `${x}`);
+		bgRect.setAttribute("y", `${y}`);
+		bgRect.setAttribute("width", `${width}`);
+		bgRect.setAttribute("height", `${height}`);
+		bgRect.setAttribute("fill", "#ffffff");
+		if (viewport) {
+			viewport.insertBefore(bgRect, viewport.firstChild);
+		} else {
+			svgElement.insertBefore(bgRect, svgElement.firstChild);
+		}
+
+		// Inyectar fuentes tipográficas limpias
+		let defs = svgElement.querySelector('defs');
+		if (!defs) {
+			defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+			svgElement.insertBefore(defs, svgElement.firstChild);
+		}
+		const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+		styleEl.textContent = `
+			text {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+			}
+		`;
+		defs.appendChild(styleEl);
 
 		// Convertir a string
 		const serializer = new XMLSerializer();
@@ -1396,20 +1441,28 @@ export class DiagramService {
 		const url = URL.createObjectURL(new Blob([svgString], { type: "image/svg+xml;charset=utf-8" }));
 
 		img.onload = () => {
+			// Renderizado a resolución 2x (HiDPI / Retina) para nitidez profesional de texto y líneas
+			const scale = 2;
 			const canvas = document.createElement("canvas");
-			canvas.width = bbox.width;
-			canvas.height = bbox.height;
+			canvas.width = width * scale;
+			canvas.height = height * scale;
 
 			const ctx = canvas.getContext("2d");
-			if (ctx) ctx.drawImage(img, 0, 0);
+			if (ctx) {
+				ctx.imageSmoothingEnabled = true;
+				ctx.imageSmoothingQuality = "high";
+				ctx.fillStyle = "#ffffff";
+				ctx.fillRect(0, 0, canvas.width, canvas.height);
+				ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+			}
 
 			canvas.toBlob((blob) => {
-			if (!blob) return;
-			const a = document.createElement("a");
-			a.href = URL.createObjectURL(blob);
-			a.download = fileName;
-			a.click();
-			URL.revokeObjectURL(a.href);
+				if (!blob) return;
+				const a = document.createElement("a");
+				a.href = URL.createObjectURL(blob);
+				a.download = fileName;
+				a.click();
+				URL.revokeObjectURL(a.href);
 			}, "image/png");
 
 			URL.revokeObjectURL(url);
@@ -1417,5 +1470,4 @@ export class DiagramService {
 
 		img.src = url;
 	}
-
 }

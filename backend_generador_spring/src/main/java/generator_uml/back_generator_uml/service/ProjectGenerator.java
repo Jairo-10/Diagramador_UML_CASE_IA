@@ -140,11 +140,13 @@ public class ProjectGenerator {
                             intermediateManyToOne.add(Map.of(
                                 "TargetEntity", firstEntity,
                                 "targetField", firstEntityField,
+                                "targetFieldCap", NamingUtil.capitalize(firstEntityField),
                                 "ignoreBackReference", NamingUtil.toField(intermediateEntityName)
                             ));
                             intermediateManyToOne.add(Map.of(
                                 "TargetEntity", secondEntity,
                                 "targetField", secondEntityField,
+                                "targetFieldCap", NamingUtil.capitalize(secondEntityField),
                                 "ignoreBackReference", NamingUtil.toField(intermediateEntityName)
                             ));
                             intermediateCtx.put("manyToOne", intermediateManyToOne);
@@ -307,6 +309,25 @@ public class ProjectGenerator {
                         boolean sourceIsMany = sourceCard.contains("*");
                         boolean targetIsMany = targetCard.contains("*");
 
+                        // ====== MANEJO ESPECIAL PARA RELACIÓN RECURSIVA (Auto-referenciada) ======
+                        if (sourceName.equals(targetName) && c.getName().equals(sourceName)) {
+                            String parentFieldName = NamingUtil.toField(targetEntity) + "Padre";
+                            String childrenFieldName = "sub" + NamingUtil.plural(NamingUtil.toField(targetEntity));
+
+                            manyToOne.add(Map.of(
+                                    "TargetEntity", targetEntity,
+                                    "targetField", parentFieldName,
+                                    "targetFieldCap", NamingUtil.capitalize(parentFieldName)
+                            ));
+
+                            oneToMany.add(Map.of(
+                                    "TargetEntity", targetEntity,
+                                    "collectionField", childrenFieldName,
+                                    "mappedBy", parentFieldName
+                            ));
+                            continue; // Procesada de forma atómica (padre e hijos sin colisión de nombres)
+                        }
+
                         // 👇 Nuevo: nunca dejes que dependency sea tratado como 1..1
                         if ("dependency".equals(rel.getType()) && !sourceIsMany && !targetIsMany) {
                             sourceIsMany = true;
@@ -320,7 +341,8 @@ public class ProjectGenerator {
                                 // source *..1 target => Source tiene ManyToOne hacia Target
                                 manyToOne.add(Map.of(
                                         "TargetEntity", targetEntity,
-                                        "targetField", NamingUtil.toField(targetEntity)
+                                        "targetField", NamingUtil.toField(targetEntity),
+                                        "targetFieldCap", NamingUtil.capitalize(NamingUtil.toField(targetEntity))
                                 ));
                             } else if (!sourceIsMany && !targetIsMany) {
                                 // 1..1 => OneToOne
@@ -328,6 +350,7 @@ public class ProjectGenerator {
                                 oneToOne.add(Map.of(
                                         "TargetEntity", targetEntity,
                                         "targetField", NamingUtil.toField(targetEntity),
+                                        "targetFieldCap", NamingUtil.capitalize(NamingUtil.toField(targetEntity)),
                                         "composition", isComposition
                                 ));
                                 if (isComposition) {
@@ -368,7 +391,8 @@ public class ProjectGenerator {
                                 // source 1..* target => Target tiene ManyToOne hacia Source
                                 manyToOne.add(Map.of(
                                         "TargetEntity", sourceEntity,
-                                        "targetField", NamingUtil.toField(sourceEntity)
+                                        "targetField", NamingUtil.toField(sourceEntity),
+                                        "targetFieldCap", NamingUtil.capitalize(NamingUtil.toField(sourceEntity))
                                 ));
                             } else if (targetIsMany && sourceIsMany) {
                                 // source *..* target => Target también tiene OneToMany hacia entidad intermedia

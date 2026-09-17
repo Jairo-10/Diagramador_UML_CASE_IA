@@ -53,7 +53,7 @@ public class {{EntityName}}Controller {
                 // Manejar relación ManyToOne: {{targetField}}
                 if (key.equals("{{targetField}}id") && value != null) {
                     Long relId = convertToLong(value);
-                    service.find{{TargetEntity}}ById(relId).ifPresent(entity::set{{TargetEntity}});
+                    service.find{{TargetEntity}}ById(relId).ifPresent(entity::set{{targetFieldCap}});
                     return;
                 }
 {{/manyToOne}}
@@ -61,7 +61,7 @@ public class {{EntityName}}Controller {
                 // Manejar relación OneToOne: {{targetField}}
                 if (key.equals("{{targetField}}id") && value != null) {
                     Long relId = convertToLong(value);
-                    service.find{{TargetEntity}}ById(relId).ifPresent(entity::set{{TargetEntity}});
+                    service.find{{TargetEntity}}ById(relId).ifPresent(entity::set{{targetFieldCap}});
                     return;
                 }
 {{/oneToOne}}

@@ -122,7 +122,7 @@ export class EditionService {
     });
   }
 
-  // ========= Edición de etiquetas de enlaces (Cardinalidad / Roles) =========
+  // ========= Selector Rápido de Cardinalidad y Edición de Etiquetas de Enlaces =========
   startEditingLabel(
     model: any,
     paper: any,
@@ -133,6 +133,12 @@ export class EditionService {
     collab?: { broadcast: (msg: any) => void },
     graph?: any
   ) {
+    // Cerrar cualquier popover previo si existiese
+    const existing = document.getElementById('uml-cardinality-popover');
+    if (existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+
     const linkView = paper.findViewByModel(model) as any;
     const labelNode = linkView?.findLabelNode?.(labelIndex) as SVGElement | undefined;
 
@@ -141,73 +147,268 @@ export class EditionService {
     if (labelNode && typeof labelNode.getBoundingClientRect === 'function') {
       const nodeRect = labelNode.getBoundingClientRect();
       absX = nodeRect.left;
-      absY = nodeRect.top;
+      absY = nodeRect.bottom + 6;
     } else {
       const paperRect = paper.el.getBoundingClientRect();
       absX = paperRect.left + x;
-      absY = paperRect.top + y;
+      absY = paperRect.top + y + 10;
     }
 
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentValue;
-    Object.assign(input.style, {
-      position: 'fixed',
-      left: `${absX}px`,
-      top: `${absY}px`,
-      border: '2px solid #2563eb',
-      borderRadius: '4px',
-      padding: '2px 6px',
-      zIndex: '10000',
-      fontSize: '13px',
-      fontWeight: 'bold',
-      background: '#ffffff',
-      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-      outline: 'none',
-      width: '60px',
-      textAlign: 'center'
-    } as CSSStyleDeclaration);
+    // Asegurar que el popover quede visible dentro de la pantalla
+    const popoverW = 240;
+    const popoverH = 145;
+    absX = Math.max(12, Math.min(window.innerWidth - popoverW - 12, absX - 40));
+    absY = Math.max(12, Math.min(window.innerHeight - popoverH - 12, absY));
 
-    document.body.appendChild(input);
-    input.focus();
-    input.select();
-
+    // Resaltar etiqueta activa
     if (labelNode) {
       labelNode.setAttribute('stroke', '#2563eb');
       labelNode.setAttribute('stroke-width', '2');
     }
 
+    // Contenedor Popover elegante
+    const popover = document.createElement('div');
+    popover.id = 'uml-cardinality-popover';
+    Object.assign(popover.style, {
+      position: 'fixed',
+      left: `${absX}px`,
+      top: `${absY}px`,
+      width: `${popoverW}px`,
+      background: '#ffffff',
+      borderRadius: '10px',
+      border: '1.5px solid #cbd5e1',
+      boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.2), 0 8px 12px -4px rgba(0, 0, 0, 0.08)',
+      padding: '10px 12px',
+      zIndex: '99999',
+      fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      userSelect: 'none',
+      boxSizing: 'border-box'
+    } as CSSStyleDeclaration);
+
+    // 1. Encabezado con título y botón de cierre
+    const header = document.createElement('div');
+    Object.assign(header.style, {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderBottom: '1px solid #f1f5f9',
+      paddingBottom: '6px'
+    } as CSSStyleDeclaration);
+
+    const title = document.createElement('span');
+    title.innerText = 'Multiplicidad UML';
+    Object.assign(title.style, {
+      fontSize: '11px',
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: '0.6px',
+      color: '#475569'
+    } as CSSStyleDeclaration);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '&times;';
+    Object.assign(closeBtn.style, {
+      background: 'none',
+      border: 'none',
+      fontSize: '16px',
+      lineHeight: '1',
+      color: '#94a3b8',
+      cursor: 'pointer',
+      padding: '0 4px'
+    } as CSSStyleDeclaration);
+
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+    popover.appendChild(header);
+
+    // 2. Botonera de Chips de Cardinalidad Rápida
+    const chipsContainer = document.createElement('div');
+    Object.assign(chipsContainer.style, {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, 1fr)',
+      gap: '5px'
+    } as CSSStyleDeclaration);
+
+    const standardOptions = ['1..1', '0..1', '0..*', '1..*'];
+
     let closed = false;
-    const cleanupHighlight = () => {
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
       if (labelNode) {
         labelNode.removeAttribute('stroke');
         labelNode.removeAttribute('stroke-width');
       }
+      if (popover.parentNode) {
+        popover.parentNode.removeChild(popover);
+      }
+      document.removeEventListener('pointerdown', onOutsideClick);
+      document.removeEventListener('keydown', onKeyDown);
     };
-    const finish = (save: boolean) => {
-      if (closed) return;
-      closed = true;
 
-      if (save) {
-        const text = input.value.trim();
+    const applyValue = (val: string) => {
+      const text = val.trim();
+      if (text.length > 0) {
         model.label(labelIndex, { ...model.label(labelIndex), attrs: { text: { text } } });
         collab?.broadcast({ t: 'edit_label', linkId: model.id, index: labelIndex, text });
         model.set('label', text);
-        const umlJson = this.exportService.export(graph);
-        this.umlValidationService.validateModel(umlJson);
+        if (graph) {
+          const umlJson = this.exportService.export(graph);
+          this.umlValidationService.validateModel(umlJson);
+        }
       }
-      if (labelNode) { labelNode.removeAttribute('stroke'); labelNode.removeAttribute('stroke-width'); }
-      input.parentNode && input.parentNode.removeChild(input);
-      cleanupHighlight();
+      cleanup();
     };
 
-    input.addEventListener('blur', () => finish(true));
-    input.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === 'Escape' || e.key === ' ') {
+    standardOptions.forEach((optText) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.innerText = optText;
+      const isSelected = currentValue.trim() === optText;
+
+      Object.assign(btn.style, {
+        background: isSelected ? '#eff6ff' : '#f8fafc',
+        color: isSelected ? '#1d4ed8' : '#1e293b',
+        border: isSelected ? '1.5px solid #3b82f6' : '1px solid #e2e8f0',
+        borderRadius: '6px',
+        padding: '5px 2px',
+        fontSize: '11px',
+        fontWeight: '700',
+        cursor: 'pointer',
+        textAlign: 'center',
+        transition: 'all 0.15s ease'
+      } as CSSStyleDeclaration);
+
+      btn.addEventListener('mouseenter', () => {
+        if (!isSelected) {
+          btn.style.background = '#f1f5f9';
+          btn.style.borderColor = '#cbd5e1';
+          btn.style.color = '#0f172a';
+        }
+      });
+      btn.addEventListener('mouseleave', () => {
+        if (!isSelected) {
+          btn.style.background = '#f8fafc';
+          btn.style.borderColor = '#e2e8f0';
+          btn.style.color = '#1e293b';
+        }
+      });
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        applyValue(optText);
+      });
+
+      chipsContainer.appendChild(btn);
+    });
+
+    popover.appendChild(chipsContainer);
+
+    // 3. Fila para Valor Personalizado con texto visible y botón de confirmación
+    const customRow = document.createElement('div');
+    Object.assign(customRow.style, {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      marginTop: '2px'
+    } as CSSStyleDeclaration);
+
+    const customInput = document.createElement('input');
+    customInput.type = 'text';
+    customInput.placeholder = 'Manual (ej. 1..5)';
+    customInput.value = standardOptions.includes(currentValue.trim()) ? '' : currentValue.trim();
+
+    Object.assign(customInput.style, {
+      flex: '1',
+      border: '1px solid #cbd5e1',
+      borderRadius: '6px',
+      padding: '4px 8px',
+      fontSize: '12px',
+      fontWeight: '600',
+      color: '#0f172a', // Texto oscuro garantizado, nunca blanco
+      background: '#ffffff',
+      outline: 'none',
+      boxSizing: 'border-box'
+    } as CSSStyleDeclaration);
+
+    customInput.addEventListener('focus', () => {
+      customInput.style.borderColor = '#2563eb';
+      customInput.style.boxShadow = '0 0 0 2px rgba(37, 99, 235, 0.15)';
+    });
+    customInput.addEventListener('blur', () => {
+      customInput.style.borderColor = '#cbd5e1';
+      customInput.style.boxShadow = 'none';
+    });
+
+    const applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.innerText = 'OK';
+    Object.assign(applyBtn.style, {
+      background: '#2563eb',
+      color: '#ffffff',
+      border: 'none',
+      borderRadius: '6px',
+      padding: '4px 10px',
+      fontSize: '11px',
+      fontWeight: '700',
+      cursor: 'pointer',
+      transition: 'background 0.15s ease'
+    } as CSSStyleDeclaration);
+
+    applyBtn.addEventListener('mouseenter', () => applyBtn.style.background = '#1d4ed8');
+    applyBtn.addEventListener('mouseleave', () => applyBtn.style.background = '#2563eb');
+
+    applyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const val = customInput.value.trim();
+      if (val) applyValue(val);
+      else cleanup();
+    });
+
+    customInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
         e.preventDefault();
-        finish(e.key !== 'Escape');
+        const val = customInput.value.trim();
+        if (val) applyValue(val);
+        else cleanup();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup();
       }
     });
+
+    customRow.appendChild(customInput);
+    customRow.appendChild(applyBtn);
+    popover.appendChild(customRow);
+
+    // Eventos de Cierre
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cleanup();
+    });
+
+    const onOutsideClick = (e: MouseEvent) => {
+      if (!popover.contains(e.target as Node)) {
+        cleanup();
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        cleanup();
+      }
+    };
+
+    // Registrar listeners en el ciclo siguiente para evitar que el propio clic inicial lo cierre
+    setTimeout(() => {
+      document.addEventListener('pointerdown', onOutsideClick);
+      document.addEventListener('keydown', onKeyDown);
+    }, 50);
+
+    document.body.appendChild(popover);
   }
 
   // ========= Actualiza la posición de los 4 puertos centrados =========
