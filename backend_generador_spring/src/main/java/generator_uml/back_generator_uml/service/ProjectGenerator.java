@@ -524,6 +524,40 @@ public class ProjectGenerator {
         Files.copy(postmanJson, root.resolve(artifactId + "-postman-collection.json"));
         Files.deleteIfExists(postmanJson); // Limpiar temporal
 
+                // ====== COPIAR MAVEN WRAPPER PARA PORTABILIDAD (ISO/IEC 25010) ======
+        try {
+            Path currentDir = Paths.get("").toAbsolutePath();
+            // Buscar mvnw en directorio actual o en backend_generador_spring
+            Path localMvnw = Files.exists(currentDir.resolve("mvnw")) ? currentDir.resolve("mvnw") : currentDir.resolve("backend_generador_spring/mvnw");
+            Path localMvnwCmd = Files.exists(currentDir.resolve("mvnw.cmd")) ? currentDir.resolve("mvnw.cmd") : currentDir.resolve("backend_generador_spring/mvnw.cmd");
+            Path localDotMvn = Files.exists(currentDir.resolve(".mvn")) ? currentDir.resolve(".mvn") : currentDir.resolve("backend_generador_spring/.mvn");
+
+            if (Files.exists(localMvnw)) {
+                Files.copy(localMvnw, root.resolve("mvnw"), StandardCopyOption.REPLACE_EXISTING);
+                root.resolve("mvnw").toFile().setExecutable(true);
+            }
+            if (Files.exists(localMvnwCmd)) {
+                Files.copy(localMvnwCmd, root.resolve("mvnw.cmd"), StandardCopyOption.REPLACE_EXISTING);
+            }
+            if (Files.exists(localDotMvn)) {
+                final Path baseDotMvn = localDotMvn;
+                try (var stream = Files.walk(baseDotMvn)) {
+                    stream.forEach(source -> {
+                        Path destination = root.resolve(".mvn").resolve(baseDotMvn.relativize(source));
+                        try {
+                            if (Files.isDirectory(source)) {
+                                if (!Files.exists(destination)) Files.createDirectories(destination);
+                            } else {
+                                Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING);
+                            }
+                        } catch (Exception ignored) {}
+                    });
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Aviso: No se pudo copiar el wrapper de Maven al zip: " + e.getMessage());
+        }
+
         Path zip = root.getParent().resolve(artifactId + ".zip");
         ZipUtil.pack(root.toFile(), zip.toFile());
         return zip;

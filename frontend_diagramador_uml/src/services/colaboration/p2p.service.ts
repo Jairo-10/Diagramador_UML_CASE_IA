@@ -11,6 +11,8 @@ export class P2PService {
   private peers = new Map<string, Peer>();
   private localId = ''; // mi channel_name asignado por el servidor
   private lastProcessedOps = new Set<string>();
+  // Timestamp map para Last-Write-Wins (LWW) en entornos cloud con latencias asimétricas
+  private lastElementTimestamps = new Map<string, number>();
   public onData?: (from: string, data: any) => void;
 
   constructor(private signaling: SignalingService) {}
@@ -20,8 +22,12 @@ export class P2PService {
     this.signaling.connect(roomId);
   }
 
+  // Lista de servidores STUN de alta disponibilidad global para atravesar NATs corporativos y cloud
   private iceServers: RTCIceServer[] = [
-    { urls: ['stun:stun.l.google.com:19302'] },
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' }
   ];
 
   private newPeer(remoteId: string, isInitiator: boolean) {
@@ -72,11 +78,32 @@ export class P2PService {
   private dispatchOp(from: string, payload: any) {
     if (!payload || !this.onData) return;
 
-    // Deduplicación inteligente para evitar dobles ejecuciones si llega por WebRTC y WebSocket
-    const opKey = `${payload.t}_${payload.id || payload.linkId || ''}_${payload.x ?? ''}_${payload.y ?? ''}_${payload.field ?? ''}_${payload.value ?? ''}_${payload.w ?? ''}_${payload.h ?? ''}`;
+    // 1. Algoritmo Last-Write-Wins (LWW): ordenar y rechazar paquetes atrasados por congestión cloud
+    const opTimestamp = typeof payload.ts === 'number' ? payload.ts : 0;
+    const targetEntityId = payload.id || payload.linkId || '';
+
+    if (targetEntityId && opTimestamp > 0) {
+      const key = `${targetEntityId}_${payload.t}`;
+      const lastTs = this.lastElementTimestamps.get(key) || 0;
+      // Si el paquete que llega es más antiguo que una modificación ya procesada para este elemento, descartar
+      if (opTimestamp < lastTs) {
+        return;
+      }
+      this.lastElementTimestamps.set(key, opTimestamp);
+    }
+
+    // 2. Deduplicación inteligente para evitar dobles ejecuciones si llega simultáneamente por WebRTC y WebSocket
+    let opKey = `${payload.t}_${payload.id || payload.linkId || ''}_${payload.x ?? ''}_${payload.y ?? ''}_${payload.field ?? ''}_${payload.value ?? ''}_${payload.w ?? ''}_${payload.h ?? ''}_${opTimestamp}`;
+    
+    if (payload.t === 'update_vertices' && payload.vertices) {
+      opKey += '_' + JSON.stringify(payload.vertices);
+    }
+    if (payload.t === 'move_link') {
+      opKey += '_' + payload.sourceId + '_' + payload.targetId;
+    }
     if (this.lastProcessedOps.has(opKey)) return;
     this.lastProcessedOps.add(opKey);
-    if (this.lastProcessedOps.size > 200) {
+    if (this.lastProcessedOps.size > 2000) {
       const first = this.lastProcessedOps.values().next().value;
       if (first) this.lastProcessedOps.delete(first);
     }
@@ -167,9 +194,13 @@ export class P2PService {
   }
 
   sendToAll(data: any) {
+    // Adjuntar timestamp global de ordenamiento para tolerancia a latencia asimétrica en la nube
+    if (typeof data === 'object' && data !== null && !data.ts) {
+      data.ts = Date.now();
+    }
     const json = JSON.stringify(data);
 
-    // Intentar enviar por DataChannels WebRTC abiertos
+    // Intentar enviar por DataChannels WebRTC abiertos (latencia sub-10ms P2P)
     for (const [id, p] of this.peers) {
       if (p.dc?.readyState === 'open') {
         try {
@@ -180,7 +211,7 @@ export class P2PService {
       }
     }
 
-    // Siempre difundir por WebSocket signaling para asegurar sincronización 100% garantizada
+    // Siempre difundir por WebSocket como canal de transporte garantizado
     this.signaling.broadcast(data);
   }
 
@@ -192,6 +223,7 @@ export class P2PService {
     this.peers.clear();
     this.localId = '';
     this.lastProcessedOps.clear();
+    this.lastElementTimestamps.clear();
     this.signaling.close();
   }
 }

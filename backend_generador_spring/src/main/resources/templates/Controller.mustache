@@ -3,6 +3,9 @@ package {{basePackage}}.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import {{basePackage}}.model.{{EntityName}};
 import {{basePackage}}.service.{{EntityName}}Service;
 import org.springframework.http.HttpStatus;
@@ -97,6 +100,9 @@ public class {{EntityName}}Controller {
         if (targetType == Double.class || targetType == double.class) return Double.parseDouble(strValue);
         if (targetType == Float.class || targetType == float.class) return Float.parseFloat(strValue);
         if (targetType == Boolean.class || targetType == boolean.class) return Boolean.parseBoolean(strValue);
+        if (targetType == BigDecimal.class) return new BigDecimal(strValue);
+        if (targetType == LocalDate.class) return LocalDate.parse(strValue);
+        if (targetType == LocalDateTime.class) return LocalDateTime.parse(strValue);
         
         return value;
     }

@@ -3,7 +3,9 @@ import { P2PService } from './p2p.service';
 import { DiagramApi } from './diagram-api';
 import { BackupService } from '../exports/backup.service';
 
-type Op = 
+type BaseOp = { ts?: number };
+
+type Op = BaseOp & (
   | { t: 'add_class'; id: string; payload: any }
   | { t: 'edit_text'; id: string; field: 'name' | 'attributes' | 'methods'; value: string }
   | { t: 'move'; id: string; x: number; y: number }
@@ -14,15 +16,17 @@ type Op =
   | { t: 'del_label'; linkId: string; index: number }
   | { t: 'move_label'; linkId: string; index: number; position: { distance: number; offset?: number } }
   | { t: 'move_link'; id: string; sourceId: string; targetId: string }
-  | { t: 'update_vertices'; id: string; vertices: any[] }
-  | { t: 'delete'; id: string }
+  | { t: 'update_vertices'; id: string; vertices: any[]; sourceId?: string; targetId?: string }
+  | { t: 'delete'; id: string; isLink?: boolean; sourceId?: string; targetId?: string }
   | { t: 'request_full_state' }
-  | { t: 'full_state'; payload: any };
+  | { t: 'full_state'; payload: any }
+);
 
 @Injectable({ providedIn: 'root' })
 export class CollaborationService {
   private api?: DiagramApi;
   private ready = false;
+  private lastFullStateAppliedTime = 0;
 
   constructor(
     private p2p: P2PService,
@@ -89,23 +93,43 @@ export class CollaborationService {
           // Forzar auto-resize en receptor de forma inmediata y diferida
           this.api?.getEdition()?.autoResizeUmlClass(m, this.api!.getPaper?.() ?? null);
           this.api?.getEdition()?.scheduleAutoResize(m, this.api!.getPaper?.() ?? null);
+          this.api?.persist?.(false);
           break;
         }
 
         case 'move': {
           const m = graph.getCell(op.id);
           if (!m) break;
-          m.position(op.x, op.y);
+          const oldPos = m.position();
+          const dx = op.x - oldPos.x;
+          const dy = op.y - oldPos.y;
+          m.position(op.x, op.y, { collab: true });
+
+          // Trasladar vertices de relaciones recursivas en el receptor para evitar distorsion
+          if (dx !== 0 || dy !== 0) {
+            const links = graph.getConnectedLinks(m);
+            links.forEach((l: any) => {
+              if (l.get('source')?.id === m.id && l.get('target')?.id === m.id) {
+                const verts = l.get('vertices') || [];
+                if (verts.length > 0) {
+                  const updated = verts.map((v: any) => ({ x: v.x + dx, y: v.y + dy }));
+                  l.set('vertices', updated, { collab: true });
+                }
+              }
+            });
+          }
+          this.api?.persist?.(false);
           break;
         }
         case 'resize': {
           const m = graph.getCell(op.id);
           if (!m) break;
-          m.resize(op.w, op.h);
+          m.resize(op.w, op.h, { collab: true });
+          this.api?.persist?.(false);
           break;
         }
         case 'add_link': {
-          if (graph.getCell(op.id)) break;
+          if (graph.getCell(op.id) || graph.getLinks().some((l: any) => l.id === op.id || l.get('id') === op.id)) break;
 
           const type = op.payload?.type || 'association';
           
@@ -113,31 +137,51 @@ export class CollaborationService {
             console.warn('[Collab] API no soporta createTypedRelationship');
             break;
           }
-          // construir SIN agregar (remote=true)
-          const link = this.api!.createTypedRelationship(op.sourceId, op.targetId, type, true);
+          // construir SIN agregar (remote=true) pasando el op.id
+          const link = this.api!.createTypedRelationship(op.sourceId, op.targetId, type, true, op.id);
 
-          // setear ID, tipo y labels ANTES de insertar
-          link.set('id', op.id);
           link.set('relationType', type);
           if (op.payload?.labels) link.set('labels', op.payload.labels);
+          if (op.payload?.vertices) link.set('vertices', op.payload.vertices);
 
           // agregar una única vez, marcado como remoto
           graph.addCell(link, { collab: true });
+          this.api?.persist?.(false);
           break;
         }
 
         case 'move_link': {
-          const link = graph.getCell(op.id);
+          let link = graph.getCell(op.id);
+          if (!link) {
+            link = graph.getLinks().find((l: any) => l.id === op.id || l.get('id') === op.id);
+          }
           if (!link) break;
           link.set('source', { id: op.sourceId }, { collab: true });
           link.set('target', { id: op.targetId }, { collab: true });
+          this.api?.persist?.(false);
           break;
         }
 
         case 'update_vertices': {
-          const link = graph.getCell(op.id);
+          let link = graph.getCell(op.id);
+          if (!link) {
+            link = graph.getLinks().find((l: any) => l.id === op.id || l.get('id') === op.id);
+          }
+          if (!link && op.sourceId && op.targetId) {
+            link = graph.getLinks().find((l: any) => 
+              l.get('source')?.id === op.sourceId && l.get('target')?.id === op.targetId
+            );
+          }
           if (!link) break;
-          link.set('vertices', op.vertices, { collab: true });
+          link.set('vertices', op.vertices || [], { collab: true });
+
+          // Forzar redibujado inmediato de la curva en el canvas del receptor
+          const paper = this.api?.getPaper?.();
+          if (paper) {
+            const linkView = paper.findViewByModel?.(link);
+            if (linkView?.update) linkView.update();
+          }
+          this.api?.persist?.(false);
           break;
         }
 
@@ -200,8 +244,23 @@ export class CollaborationService {
         }
 
         case 'delete': {
-          const m = graph.getCell(op.id);
-          if (m) m.remove({ collab: true });
+          let m = graph.getCell(op.id);
+          if (!m) {
+            m = graph.getCells().find((c: any) => c.id === op.id || c.get('id') === op.id);
+          }
+          if (!m) {
+            m = graph.getLinks().find((l: any) => l.id === op.id || l.get('id') === op.id);
+          }
+          // Fallback ultra-resiliente: si es un link y no coincidió por ID, resolver por extremos
+          if (!m && op.isLink && op.sourceId && op.targetId) {
+            m = graph.getLinks().find((l: any) => 
+              l.get('source')?.id === op.sourceId && l.get('target')?.id === op.targetId
+            );
+          }
+          if (m) {
+            m.remove({ collab: true });
+            this.api?.persist?.(false);
+          }
           break;
         }
 
@@ -215,7 +274,13 @@ export class CollaborationService {
         }
 
         case 'full_state': {
+          // Descartar snapshots duplicados si múltiples compañeros respondieron casi en el mismo segundo
+          const now = Date.now();
+          if (now - this.lastFullStateAppliedTime < 2500) {
+            break;
+          }
           if (this.api && op.payload && Array.isArray(op.payload.classes) && op.payload.classes.length > 0) {
+            this.lastFullStateAppliedTime = now;
             this.api.loadFromJson(op.payload, true);
           }
           break;

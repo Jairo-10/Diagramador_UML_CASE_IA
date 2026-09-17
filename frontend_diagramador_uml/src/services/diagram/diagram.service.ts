@@ -83,12 +83,23 @@ export class DiagramService {
 				height: h,
 				gridSize: 10,
 				drawGrid: true,
-				interactive: { elementMove: true, addLinkFromMagnet: true, useLinkTools: false },
-				linkTools: false,
+				interactive: (cellView: any) => {
+					if (cellView.model?.isLink?.()) {
+						return {
+							vertexAdd: true,
+							vertexMove: true,
+							vertexRemove: true,
+							labelMove: true,
+							arrowheadMove: false
+						};
+					}
+					return { elementMove: true, addLinkFromMagnet: true };
+				},
+				linkTools: true,
 				background: { color: '#f8fafc' },
 				defaultConnector: { name: 'rounded' },
 				defaultLink: () => this.buildRelationship(),
-				validateConnection: (cvS: any, _mS: any, cvT: any, _mT: any) => cvS !== cvT,
+				validateConnection: (_cvS: any, _mS: any, _cvT: any, _mT: any) => true,
 			});
 			/**************************************************************************************************
 			 * ATAJOS DE TECLADO: copiar, pegar, duplicar, cortar
@@ -189,6 +200,8 @@ export class DiagramService {
 			 * EVENTOS INTERACTIVOS EN EL PAPER (COLABORATIVO)
 			 ***************************************************************************************************/
 			let pendingPos: { id: string; x: number; y: number } | null = null;
+			const lastElementPositions = new Map<string, { x: number; y: number }>();
+
 			const flushMove = () => {
 				if (pendingPos) {
 					this.collab.broadcast({ t: 'move', ...pendingPos });
@@ -197,74 +210,166 @@ export class DiagramService {
 				requestAnimationFrame(flushMove);
 			};
 			requestAnimationFrame(flushMove);
+
+			this.paper.on('element:pointerdown', (view: any) => {
+				const m = view.model;
+				if (m?.isElement?.()) {
+					const p = m.position();
+					lastElementPositions.set(m.id, { x: p.x, y: p.y });
+				}
+			});
+
 			this.paper.on('element:pointermove', (view: any) => {
 				const m = view.model;
+				if (!m?.isElement?.()) return;
 				const p = m.position();
+				const lastP = lastElementPositions.get(m.id);
+				if (lastP) {
+					const dx = p.x - lastP.x;
+					const dy = p.y - lastP.y;
+					if (dx !== 0 || dy !== 0) {
+						// Trasladar en vivo los vértices de relaciones recursivas para que no se distorsionen
+						const links = this.graph.getConnectedLinks(m);
+						links.forEach((l: any) => {
+							if (l.get('source')?.id === m.id && l.get('target')?.id === m.id) {
+								const verts = l.get('vertices') || [];
+								if (verts.length > 0) {
+									const updated = verts.map((v: any) => ({ x: v.x + dx, y: v.y + dy }));
+									l.set('vertices', updated);
+								}
+							}
+						});
+						lastElementPositions.set(m.id, { x: p.x, y: p.y });
+					}
+				} else {
+					lastElementPositions.set(m.id, { x: p.x, y: p.y });
+				}
 				pendingPos = { id: m.id, x: p.x, y: p.y };
 			});
+
 			this.paper.on('element:pointerup', (view: any) => {
 				const m = view.model;
+				if (!m?.isElement?.()) return;
+				lastElementPositions.delete(m.id);
 				const p = m.position();
 				this.collab.broadcast({ t: 'move', id: m.id, x: p.x, y: p.y });
-				pendingPos = null; // limpiar
+				pendingPos = null;
+
+				// Difundir vértices actualizados de cualquier relación recursiva conectada
+				const links = this.graph.getConnectedLinks(m);
+				links.forEach((l: any) => {
+					if (l.get('source')?.id === m.id && l.get('target')?.id === m.id) {
+						const v = l.get('vertices') || [];
+						if (v.length > 0) {
+							this.collab.broadcast({
+								t: 'update_vertices',
+								id: l.id,
+								vertices: v,
+								sourceId: m.id,
+								targetId: m.id
+							});
+						}
+					}
+				});
+				this.persist(true);
 			});
 
-      
+			// 👉 Eliminación centralizada de celdas (elementos o relaciones)
 			this.graph.on('remove', (cell: any, _collection: any, opt: any = {}) => {
-				if (this.isClearingGraph || opt?.collab) return; // si se está limpiando la memoria o viene de remoto, no emitir
-				this.collab.broadcast({ t: 'delete', id: cell.id });
+				if (this.isClearingGraph || opt?.collab) return;
+				const isLink = !!cell?.isLink?.();
+				const src = isLink ? cell.get('source')?.id : undefined;
+				const trg = isLink ? cell.get('target')?.id : undefined;
+
+				this.collab.broadcast({
+					t: 'delete',
+					id: cell.id,
+					isLink,
+					sourceId: src,
+					targetId: trg
+				});
 				const umlJson = this.exportService.export(this.graph);
 				this.umlValidationService.validateModel(umlJson);
+				this.persist(true);
 			});
 
-			//👉 Difundir movimiento y redimensionamiento
-			this.paper.on('element:pointerup', (view: any) => {
+			// 👉 Redimensionamiento
+			let pendingResize: { id: string; w: number; h: number } | null = null;
+			const flushResize = () => {
+				if (pendingResize) {
+					this.collab.broadcast({ t: 'resize', ...pendingResize });
+					pendingResize = null;
+				}
+				requestAnimationFrame(flushResize);
+			};
+			requestAnimationFrame(flushResize);
+
+			this.paper.on('element:resize', (view: any) => {
 				const m = view.model;
-				const p = m.position();
-				this.collab.broadcast({ t: 'move', id: m.id, x: p.x, y: p.y });
+				const s = m.size();
+				pendingResize = { id: m.id, w: s.width, h: s.height };
 			});
-			// Si tienes resize interactivo, algo como:
+
 			this.paper.on('element:resize:pointerup', (view: any) => {
 				const m = view.model;
 				const s = m.size();
 				this.collab.broadcast({ t: 'resize', id: m.id, w: s.width, h: s.height });
+				pendingResize = null;
 			});
-			// Difundir edición de etiquetas en links
-			this.paper.on('link:label:pointerup', (linkView: any, evt: any, x: number, y: number) => {
+
+			// 👉 Edición y movimiento de etiquetas en links
+			let pendingLabelMove: { linkId: string; index: number; position: { distance: number; offset?: number } } | null = null;
+			const flushLabelMove = () => {
+				if (pendingLabelMove) {
+					this.collab.broadcast({ t: 'move_label', ...pendingLabelMove });
+					pendingLabelMove = null;
+				}
+				requestAnimationFrame(flushLabelMove);
+			};
+			requestAnimationFrame(flushLabelMove);
+
+			this.paper.on('link:label:pointermove', (linkView: any, evt: any) => {
+				const model = linkView.model;
+				const idx = this.getClickedLabelIndex(linkView, evt);
+				if (idx == null) return;
+				const lbl = model.label(idx);
+				if (!lbl) return;
+				pendingLabelMove = { linkId: model.id, index: idx, position: lbl.position };
+			});
+
+			this.paper.on('link:label:pointerup', (linkView: any, evt: any) => {
 				const model = linkView.model;
 				const idx = this.getClickedLabelIndex(linkView, evt);
 				if (idx == null) return;
 				const lbl = model.label(idx);
 				if (!lbl) return;
 				this.collab.broadcast({ t: 'move_label', linkId: model.id, index: idx, position: lbl.position });
+				pendingLabelMove = null;
 			});
 
 			// 1) Emitir add_link al añadir un Link localmente
 			this.graph.on('add', (cell: any, _col: any, opt: any = {}) => {
-				if (opt?.collab) return;                 // si viene de remoto, no re-emitir
+				if (opt?.collab) return;
 				if (!cell?.isLink?.()) return;
 
 				const src = cell.get('source')?.id;
 				const trg = cell.get('target')?.id;
-
-				// Si todavía no tiene ambos extremos (ej. link "fantasma" al arrastrar),
-				// dejamos que el handler de change:source/target haga el broadcast cuando se completen.
 				if (!src || !trg) return;
 
 				if (!cell.has('alreadyBroadcasted')) {
 					cell.set('alreadyBroadcasted', true, { silent: true });
 					const type = cell.get('relationType') || 'association';
 					this.collab.broadcast({
-					t: 'add_link',
-					id: cell.id,
-					sourceId: src,
-					targetId: trg,
-					payload: { type, labels: cell.get('labels') }
+						t: 'add_link',
+						id: cell.id,
+						sourceId: src,
+						targetId: trg,
+						payload: { type, labels: cell.get('labels'), vertices: cell.get('vertices') || [] }
 					});
 				}
 			});
 
-			// 2) Respaldo: si el link se añadió sin extremos y luego se conectan
+			// 2) Respaldo: si el link se añadió sin extremos y luego se conectan, o si se reconecta
 			this.graph.on('change:source change:target', (link: any, _val: any, opt: any = {}) => {
 				if (!link?.isLink || opt?.collab) return;
 
@@ -276,109 +381,65 @@ export class DiagramService {
 					link.set('alreadyBroadcasted', true, { silent: true });
 					const type = link.get('relationType') || 'association';
 					this.collab.broadcast({
-					t: 'add_link',
-					id: link.id,
-					sourceId: src,
-					targetId: trg,
-					payload: { type, labels: link.get('labels') }
+						t: 'add_link',
+						id: link.id,
+						sourceId: src,
+						targetId: trg,
+						payload: { type, labels: link.get('labels'), vertices: link.get('vertices') || [] }
 					});
 				} else {
 					this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
 					const umlJson = this.exportService.export(this.graph);
-    				this.umlValidationService.validateModel(umlJson);
+					this.umlValidationService.validateModel(umlJson);
 				}
 			});
 
-
-			/*COLABORACION DE RELACIONES*/
-			// Problema de loop al mover relacion
-			let pendingLabelMove: { linkId: string; index: number; position: { distance: number; offset?: number } } | null = null;
-			const flushLabelMove = () => {
-				if (pendingLabelMove) {
-				this.collab.broadcast({ t: 'move_label', ...pendingLabelMove });
-				pendingLabelMove = null;
+			// 3) Curvatura y vértices de links en tiempo real
+			this.graph.off('change:vertices');
+			let pendingVertices: { id: string; vertices: any[]; sourceId?: string; targetId?: string } | null = null;
+			const flushVertices = () => {
+				if (pendingVertices) {
+					this.collab.broadcast({ t: 'update_vertices', ...pendingVertices });
+					pendingVertices = null;
 				}
-				requestAnimationFrame(flushLabelMove);
+				setTimeout(flushVertices, 40);
 			};
-			requestAnimationFrame(flushLabelMove);
-				this.paper.on('link:label:pointermove', (linkView: any, evt: any) => {
-				const model = linkView.model;
-				const idx = this.getClickedLabelIndex(linkView, evt);
-				if (idx == null) return;
-				const lbl = model.label(idx);
-				if (!lbl) return;
-				pendingLabelMove = { linkId: model.id, index: idx, position: lbl.position };
-			});
-			// al soltar, enviamos una última confirmación
-			this.paper.on('link:label:pointerup', (linkView: any, evt: any) => {
-				const model = linkView.model;
-				const idx = this.getClickedLabelIndex(linkView, evt);
-				if (idx == null) return;
-				const lbl = model.label(idx);
-				if (!lbl) return;
-				this.collab.broadcast({ t: 'move_label', linkId: model.id, index: idx, position: lbl.position });
-				pendingLabelMove = null;
-			});
+			setTimeout(flushVertices, 40);
 
-			// 👉 Vertices
-			this.graph.on('change:source change:target', (link: any, _val: any, opt: any = {}) => {
-				if (!link?.isLink || opt?.collab) return;
-
-				const src = link.get('source')?.id;
-				const trg = link.get('target')?.id;
-				if (!src || !trg) return;
-
-				if (!link.has('alreadyBroadcasted')) {
-					link.set('alreadyBroadcasted', true);
-
-					// 👇 extraer el tipo del link si existe, si no, fallback
-					const type = link.get('relationType') || 'association';
-
-					this.collab.broadcast({
-					t: 'add_link',
-					id: link.id,
-					sourceId: src,
-					targetId: trg,
-					payload: { type, labels: link.get('labels') }
-					});
-				} else {
-					this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
-					const umlJson = this.exportService.export(this.graph);
-    				this.umlValidationService.validateModel(umlJson);
-				}
-			});
-
-			// 3.3. CURVATURA / RUTEO DEL LINK (vértices)
-			this.graph.off('change:vertices'); // evita doble registro si reinicializas
 			this.graph.on('change:vertices', (link: any, _v: any, opt: any = {}) => {
-				if (!link?.isLink || opt?.collab) return;
-				this.collab.broadcast({ t: 'update_vertices', id: link.id, vertices: link.get('vertices') || [] });
+				if (opt?.collab) return;
+				if (link?.isLink?.()) {
+					const src = link.get('source')?.id;
+					const trg = link.get('target')?.id;
+					pendingVertices = {
+						id: link.id,
+						vertices: link.get('vertices') || [],
+						sourceId: src,
+						targetId: trg
+					};
+					this.persist();
+				}
 			});
 
-			// Problema de loop al mover clase
-			let pendingResize: { id: string; w: number; h: number } | null = null;
-			const flushResize = () => {
-				if (pendingResize) {
-					this.collab.broadcast({ t: 'resize', ...pendingResize });
-					pendingResize = null;
+			this.paper.on('link:pointerup', (linkView: any) => {
+				const link = linkView.model;
+				if (link?.isLink?.()) {
+					const src = link.get('source')?.id;
+					const trg = link.get('target')?.id;
+					this.collab.broadcast({
+						t: 'update_vertices',
+						id: link.id,
+						vertices: link.get('vertices') || [],
+						sourceId: src,
+						targetId: trg
+					});
+					this.persist(true);
 				}
-				requestAnimationFrame(flushResize);
-			};
-			requestAnimationFrame(flushResize);
-			this.paper.on('element:resize', (view: any) => {
-				const m = view.model;
-				const s = m.size();
-				pendingResize = { id: m.id, w: s.width, h: s.height };
 			});
-			this.paper.on('element:resize:pointerup', (view: any) => {
-				const m = view.model;
-				const s = m.size();
-				this.collab.broadcast({ t: 'resize', id: m.id, w: s.width, h: s.height });
-				pendingResize = null;
-			});
-			// Guardar en localStorage y backend ante cambios reales del usuario
-			this.graph.on('add remove change', () => {
-				if (this.isClearingGraph) return;
+
+			// Guardar en localStorage y backend ante cambios locales del usuario
+			this.graph.on('add remove change', (_cell: any, _col: any, opt: any = {}) => {
+				if (this.isClearingGraph || opt?.collab) return;
 				this.persist();
 			});
 
@@ -487,12 +548,8 @@ export class DiagramService {
 						}
 					],
 					action: (_evt: any, view: any) => {
-						const id = view.model.id;
+						// view.model.remove() dispara graph.on('remove') de forma centralizada
 						view.model.remove();
-						this.collab.broadcast({ t: 'delete', id });
-						const umlJson = this.exportService.export(this.graph);
-						this.umlValidationService.validateModel(umlJson);
-						this.persist(true);
 					}
 				});
 				const toolsView = new this.joint.dia.ToolsView({
@@ -521,11 +578,12 @@ export class DiagramService {
 				createRelationship: (sourceId, targetId, remote = false) =>
 				this.createRelationship(sourceId, targetId, remote),
 
-				createTypedRelationship: (sourceId: string, targetId: string, type: string, remote = false) =>
-				this.createTypedRelationship(sourceId, targetId, type, remote),
+				createTypedRelationship: (sourceId: string, targetId: string, type: string, remote = false, linkId?: string) =>
+				this.createTypedRelationship(sourceId, targetId, type, remote, linkId),
 
 				loadFromJson: (json) => this.loadFromJson(json),
 				exportToJson: () => this.exportService.export(this.graph),
+				persist: (immediate = false) => this.persist(immediate),
 			});
 
 			this.currentRoomId = roomId;
@@ -580,9 +638,10 @@ export class DiagramService {
 
 	// Construye una relación (link) con configuración por defecto
 	private buildRelationship(sourceId?: string, targetId?: string) {
-		return new this.joint.dia.Link({
+		const isSelf = !!(sourceId && targetId && sourceId === targetId);
+		const link = new this.joint.dia.Link({
 			name: 'Relacion',
-			relationType: 'association',    // 👈 tipo por defecto
+			relationType: 'association',
 			source: sourceId ? { id: sourceId } : undefined,
 			target: targetId ? { id: targetId } : undefined,
 			attrs: {
@@ -602,6 +661,22 @@ export class DiagramService {
 				}
 			]
 		});
+
+		if (isSelf && sourceId) {
+			const elem = this.graph.getCell(sourceId);
+			if (elem) {
+				const bbox = elem.getBBox();
+				const x = bbox.x + bbox.width;
+				const y = bbox.y;
+				link.set('vertices', [
+					{ x: x + 40, y: y + 25 },
+					{ x: x + 40, y: y - 35 },
+					{ x: bbox.x + bbox.width * 0.5, y: y - 35 }
+				]);
+			}
+		}
+
+		return link;
 	}
 
 
@@ -653,11 +728,14 @@ export class DiagramService {
 		sourceId: string,
 		targetId: string,
 		type: string = 'association',
-		remote: boolean = false
-		) {
+		remote: boolean = false,
+		linkId?: string
+	) {
+		const isSelf = sourceId === targetId;
 		const attrs = this.relationAttrs[type] || this.relationAttrs.association;
 
 		const link = new this.joint.dia.Link({
+			id: linkId || undefined,
 			name: 'Relacion',
 			relationType: type,             // 👈 guarda el tipo
 			source: { id: sourceId },
@@ -665,16 +743,31 @@ export class DiagramService {
 			attrs
 		});
 
+		// Si es una relacion recursiva (source === target), crear automaticamente el arco/bucle visible
+		if (isSelf) {
+			const elem = this.graph?.getCell(sourceId);
+			if (elem) {
+				const bbox = elem.getBBox();
+				const x = bbox.x + bbox.width;
+				const y = bbox.y;
+				link.set('vertices', [
+					{ x: x + 40, y: y + 25 },
+					{ x: x + 40, y: y - 35 },
+					{ x: bbox.x + bbox.width * 0.5, y: y - 35 }
+				]);
+			}
+		}
+
 		// En UML: solo Asociación, Agregación y Composición llevan cardinalidades numéricas
 		if (['association', 'aggregation', 'composition'].includes(type)) {
 			link.set('labels', [
 				{
-					position: { distance: 35, offset: -14 },
+					position: { distance: isSelf ? 25 : 35, offset: isSelf ? -18 : -14 },
 					attrs: { text: { text: type === 'composition' ? '1..1' : '0..1', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
 					markup: [{ tagName: 'text', selector: 'text' }]
 				},
 				{
-					position: { distance: -35, offset: -14 },
+					position: { distance: isSelf ? -25 : -35, offset: isSelf ? -18 : -14 },
 					attrs: { text: { text: '1..*', fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
 					markup: [{ tagName: 'text', selector: 'text' }]
 				}
@@ -693,12 +786,10 @@ export class DiagramService {
 	 ***************************************************************************************************/
 	deleteSelected() {
 		if (!this.selectedCell) return;
-		const id = this.selectedCell.id;
-		this.selectedCell.remove();
-		this.collab.broadcast({ t: 'delete', id });
+		const cell = this.selectedCell;
 		this.selectedCell = null;
-		// Persistencia inmediata sin esperar debounce para evitar desincronizaciones al salir
-		this.persist(true);
+		// cell.remove() dispara graph.on('remove') que difunde delete con metadatos y persiste inmediatamente
+		cell.remove();
 	}
 
 	// Copiar clase UML seleccionada
@@ -1126,8 +1217,7 @@ export class DiagramService {
 					return;
 				}
 
-				const link = this.createTypedRelationship(srcId, trgId, rel.type, true);
-				if (rel.id) link.set('id', rel.id);
+				const link = this.createTypedRelationship(srcId, trgId, rel.type, true, rel.id);
 
 				if (rel.labels) {
 					link.set(
@@ -1198,21 +1288,31 @@ export class DiagramService {
 	// Guarda el estado actual del diagrama en localStorage y sincroniza en vivo con PostgreSQL
 	public persist(immediate: boolean = false) {
 		if (!this.graph || this.isClearingGraph) return;
-		const json = this.exportService.export(this.graph);
+		
+		// Guardamos en LocalStorage con el estado actual
+		const localJson = this.exportService.export(this.graph);
 		if (this.storageKey) {
-			localStorage.setItem(this.storageKey, JSON.stringify(json));
+			localStorage.setItem(this.storageKey, JSON.stringify(localJson));
 		}
+		
 		// Auto-sincronización con PostgreSQL (inmediata en borrados o debounced 500ms en movimientos)
 		if (this.currentRoomId) {
 			if (this.saveTimeout) clearTimeout(this.saveTimeout);
+			
 			if (immediate) {
-				this.backup.setBackupUml(this.currentRoomId, json).subscribe({
+				// Exportar en el instante exacto del envío HTTP
+				const currentJson = this.exportService.export(this.graph);
+				this.backup.setBackupUml(this.currentRoomId, currentJson).subscribe({
 					next: () => console.log('💾 Guardado inmediato sincronizado en PostgreSQL.'),
 					error: (err) => console.warn('⚠️ Error en sync PostgreSQL:', err)
 				});
 			} else {
 				this.saveTimeout = setTimeout(() => {
-					this.backup.setBackupUml(this.currentRoomId, json).subscribe({
+					// Exportar el grafo en el instante en que se cumple el timeout,
+					// evitando enviar estados capturados viejos si ocurrieron cambios remotos en el medio.
+					if (!this.graph || this.isClearingGraph) return;
+					const delayedJson = this.exportService.export(this.graph);
+					this.backup.setBackupUml(this.currentRoomId!, delayedJson).subscribe({
 						next: () => console.log('💾 Auto-guardado sincronizado en PostgreSQL.'),
 						error: (err) => console.warn('⚠️ Error en auto-sync PostgreSQL:', err)
 					});

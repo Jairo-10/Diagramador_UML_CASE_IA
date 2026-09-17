@@ -8,10 +8,13 @@ public class TypeMapper {
         return switch (s) {
             case "int", "integer" -> "Integer";
             case "long" -> "Long";
-            case "string" -> "String";   // 🔥 corregido
+            case "string", "varchar", "text", "char" -> "String";
             case "bool", "boolean" -> "Boolean";
             case "float" -> "Float";
             case "double" -> "Double";
+            case "decimal", "numeric", "bigdecimal" -> "BigDecimal";
+            case "date", "localdate" -> "LocalDate";
+            case "datetime", "timestamp", "localdatetime" -> "LocalDateTime";
             default -> "String"; // fallback seguro
         };
     }

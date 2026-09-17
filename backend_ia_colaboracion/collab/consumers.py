@@ -57,6 +57,11 @@ class CanvasConsumer(AsyncWebsocketConsumer):
         except Exception:
             return
 
+        # Heartbeat para proxies en la nube (Nginx / Cloudflare / AWS)
+        if data.get("type") == "ping":
+            await self.send(text_data=json.dumps({"type": "pong"}))
+            return
+
         # Si es un broadcast → enviar a todos en la sala
         if data.get("type") == "broadcast":
             await self.channel_layer.group_send(
@@ -83,6 +88,10 @@ class CanvasConsumer(AsyncWebsocketConsumer):
 
     # Handlers para los eventos enviados
     async def broadcast_message(self, event):
+        # En la nube: no retransmitir al mismo cliente que lo envió (ahorra ancho de banda y evita eco)
+        if event.get("from") == self.channel_name:
+            return
+
         await self.send(text_data=json.dumps({
             "type": "broadcast",
             "from": event["from"],

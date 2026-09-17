@@ -612,6 +612,9 @@ public class PostmanCollectionGenerator {
                 yield objectMapper.valueToTree(100);
             }
             case "Double", "Float" -> objectMapper.valueToTree(99.99);
+            case "BigDecimal" -> objectMapper.valueToTree(150.75);
+            case "LocalDate" -> objectMapper.valueToTree("2026-09-16");
+            case "LocalDateTime" -> objectMapper.valueToTree("2026-09-16T12:00:00");
             case "Boolean" -> objectMapper.valueToTree(true);
             case "String" -> {
                 if (fieldName.toLowerCase().contains("name") || fieldName.toLowerCase().contains("nombre"))
