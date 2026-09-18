@@ -18,7 +18,7 @@ export class FrontendGeneratorService {
   generateFrontend(json: any, fileName: string = 'frontend.zip') {
     this.loading.set(true);
     return this.http.post(`${this.API}api/generar_flutter/`, json, {
-      responseType: 'blob'  // 👈 importante: recibir archivo binario
+      responseType: 'blob'  // Recibir archivo binario blob
     }).subscribe({
       next: (zipBlob: Blob) => {
         console.log('Frontend generado con éxito');

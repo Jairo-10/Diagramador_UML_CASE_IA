@@ -50,8 +50,8 @@ export class DiagramExportService {
           name: cell.get('name'),
           attributes,
           methods,
-          position: cell.position(),  // 👈 posición
-          size: cell.size()           // 👈 tamaño
+          position: cell.position(),  // Posicion del elemento
+          size: cell.size()           // Dimensiones del elemento
         });
       } else if (cell.isLink?.()) {
         relationships.push({

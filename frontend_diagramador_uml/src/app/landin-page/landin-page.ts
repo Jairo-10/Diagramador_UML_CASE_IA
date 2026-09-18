@@ -77,3 +77,5 @@ export class LandinPage implements OnInit {
     this.errorMessage = '';
   }
 }
+
+// touch

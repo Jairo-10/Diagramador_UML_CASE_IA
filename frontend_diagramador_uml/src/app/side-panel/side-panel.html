@@ -16,7 +16,7 @@
         </div>
       </div>
       <div>
-        <h2 class="text-sm font-bold font-['Outfit'] tracking-wide text-white leading-none">NEXUS STUDIO</h2>
+        <h2 class="text-sm font-bold font-['Outfit'] tracking-wide text-white leading-none">UML STUDIO</h2>
         <span class="text-[10px] text-indigo-400 font-mono">Modelador UML</span>
       </div>
     </div>
@@ -210,7 +210,7 @@
               'bg-rose-600/20 border-rose-500/50 text-rose-400 animate-pulse': recognizing(),
               'bg-slate-800 border-slate-700/80 hover:bg-slate-700 text-slate-300': !recognizing()
             }">
-            <span *ngIf="!recognizing()" class="text-sm">🎤</span>
+            <svg *ngIf="!recognizing()" class="w-4 h-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15a3 3 0 01-3-3V4.5a3 3 0 116 0v7.5a3 3 0 01-3 3z" /></svg>
             <span *ngIf="recognizing()" class="text-xs font-bold font-mono">⏹️</span>
           </button>
 
@@ -247,14 +247,9 @@
   <!-- Header del Panel Derecho -->
   <div class="px-4 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/80">
     <div class="flex items-center gap-2">
-      <span class="text-base">📦</span>
-      <span class="text-sm font-bold font-['Outfit'] text-white">Exportar & Validar</span>
+      <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg><span class="text-sm font-bold font-[\'Outfit\'] text-white">Exportar & Validar</span>
     </div>
-    <button 
-      (click)="closeRightDrawer()"
-      class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold transition cursor-pointer">
-      ✕
-    </button>
+    <button (click)="closeRightDrawer()" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center text-base font-bold transition cursor-pointer">&times;</button>
   </div>
 
   <!-- Contenido Scrolleable del Panel Derecho -->
@@ -288,9 +283,7 @@
           [disabled]="isLoadingGenerateBackend()"
           class="w-full py-3 px-3.5 rounded-xl bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-md shadow-emerald-950/40 transition flex items-center justify-between cursor-pointer active:scale-[0.99]">
           <div class="flex items-center gap-2.5">
-            <span class="text-lg">☕</span>
-            <div class="text-left leading-tight">
-              <div>Backend Spring Boot 3</div>
+            <svg class="w-5 h-5 text-emerald-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.75 5.1a3 3 0 012.4-1.35h7.7a3 3 0 012.4 1.35l2.1 3.15a4.5 4.5 0 01.9 2.7" /></svg><div class="text-left leading-tight"><div>Backend Spring Boot 3</div>
               <div class="text-[10px] font-normal text-emerald-100 font-mono">JPA + Postman (.ZIP)</div>
             </div>
           </div>
@@ -305,9 +298,7 @@
           [disabled]="isLoadingGeneratefrontend()"
           class="w-full py-3 px-3.5 rounded-xl bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-md shadow-blue-950/40 transition flex items-center justify-between cursor-pointer active:scale-[0.99]">
           <div class="flex items-center gap-2.5">
-            <span class="text-lg">📱</span>
-            <div class="text-left leading-tight">
-              <div>Frontend Flutter Móvil</div>
+            <svg class="w-5 h-5 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" /></svg><div class="text-left leading-tight"><div>Frontend Flutter Móvil</div>
               <div class="text-[10px] font-normal text-blue-100 font-mono">App Dart CRUD (.ZIP)</div>
             </div>
           </div>
@@ -321,15 +312,13 @@
           <button
             (click)="exportSql()"
             class="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer">
-            <span>🐘</span>
-            <span>Script SQL</span>
+            <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" /></svg><span>Script SQL</span>
           </button>
 
           <button
             (click)="exportImage()"
             class="py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-xs font-semibold transition flex items-center justify-center gap-1.5 cursor-pointer">
-            <span>🖼️</span>
-            <span>Imagen PNG</span>
+            <svg class="w-4 h-4 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" /></svg><span>Imagen PNG</span>
           </button>
         </div>
       </div>
@@ -337,7 +326,7 @@
 
     <!-- 3. IMPORTACIÓN POR VISIÓN IA -->
     <div class="space-y-2">
-      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono block">Importar con Gemini Vision</span>
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono block">Importar Diagrama desde Imagen</span>
       
       <label class="group relative rounded-xl bg-slate-900/80 border border-dashed border-slate-750 hover:border-indigo-500/60 p-3 flex flex-col items-center justify-center text-center cursor-pointer transition hover:bg-slate-850">
         <input type="file" (change)="onImportImage($event)" accept="image/*" class="hidden" />
@@ -382,7 +371,7 @@
           <!-- Relaciones Válidas -->
           <div *ngIf="validationResult()?.analysis?.validas?.length > 0" class="space-y-1">
             <div class="text-[11px] font-bold text-emerald-400 flex items-center gap-1">
-              <span>✅</span> Relaciones Válidas
+              <svg class="w-3.5 h-3.5 text-emerald-400 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>Relaciones Válidas
             </div>
             <ul class="space-y-1 pl-1">
               <li *ngFor="let v of validationResult().analysis.validas" class="p-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300">
@@ -394,13 +383,13 @@
           <!-- Errores y Sugerencias -->
           <div *ngIf="validationResult()?.analysis?.errores?.length > 0" class="space-y-1">
             <div class="text-[11px] font-bold text-rose-400 flex items-center gap-1">
-              <span>❌</span> Sugerencias
+              <svg class="w-3.5 h-3.5 text-rose-400 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>Sugerencias
             </div>
             <ul class="space-y-1 pl-1">
               <li *ngFor="let e of validationResult().analysis.errores" class="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-[11px] text-rose-300 space-y-0.5">
                 <div><strong>{{ e.relacion }}</strong></div>
                 <div class="text-slate-300">{{ e.problema }}</div>
-                <div class="text-indigo-300 font-semibold">💡 {{ e.sugerencia }}</div>
+                <div class="text-indigo-300 font-medium text-[11px] flex items-center gap-1"><span class="text-indigo-400">&bull;</span> {{ e.sugerencia }}</div>
               </li>
             </ul>
           </div>

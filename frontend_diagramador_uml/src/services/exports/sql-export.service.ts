@@ -3,35 +3,79 @@ import { Injectable } from '@angular/core';
 @Injectable({ providedIn: 'root' })
 export class SqlExportService {
 
-  private typeMap: Record<string, string> = {
-    'UUID': 'UUID',
-    'String': 'VARCHAR(255)',
-    'Text': 'TEXT',
-    'Integer': 'INT',
-    'Int': 'INT',
-    'int': 'INT',
-    'Long': 'BIGINT',
-    'Boolean': 'BOOLEAN',
-    'Float': 'FLOAT',
-    'Double': 'DOUBLE PRECISION',
-    'Decimal': 'DECIMAL(15,2)',
-    'Date': 'DATE',
-    'DateTime': 'TIMESTAMP'
-  };
+  private invalidPkTypes = new Set([
+    'TEXT',
+    'FLOAT',
+    'DOUBLE PRECISION',
+    'DECIMAL(12,2)',
+    'DECIMAL(15,2)',
+    'BOOLEAN',
+    'DATE',
+    'TIME',
+    'TIMESTAMP'
+  ]);
 
-  private invalidPkTypes = new Set(['TEXT', 'FLOAT', 'DOUBLE PRECISION', 'DECIMAL(15,2)', 'BOOLEAN']);
+  mapToSqlType(rawType: string): string {
+    if (!rawType) return 'VARCHAR(255)';
+    const t = rawType.trim().toLowerCase();
+    switch (t) {
+      case 'int':
+      case 'integer':
+      case 'serial':
+        return 'INT';
+      case 'long':
+      case 'bigint':
+      case 'bigserial':
+        return 'BIGINT';
+      case 'bool':
+      case 'boolean':
+        return 'BOOLEAN';
+      case 'float':
+        return 'FLOAT';
+      case 'double':
+      case 'double precision':
+      case 'real':
+        return 'DOUBLE PRECISION';
+      case 'decimal':
+      case 'numeric':
+      case 'bigdecimal':
+      case 'money':
+        return 'DECIMAL(12,2)';
+      case 'date':
+      case 'localdate':
+        return 'DATE';
+      case 'time':
+      case 'localtime':
+        return 'TIME';
+      case 'datetime':
+      case 'timestamp':
+      case 'localdatetime':
+        return 'TIMESTAMP';
+      case 'uuid':
+        return 'UUID';
+      case 'text':
+        return 'TEXT';
+      case 'char':
+      case 'character':
+        return 'CHAR(1)';
+      case 'string':
+      case 'varchar':
+      default:
+        return 'VARCHAR(255)';
+    }
+  }
 
   exportToSql(umlJson: any, dbName: string = 'uml_database'): string {
     let sql = '';
     sql += `-- ==========================================================\n`;
-    sql += `-- Script DDL generado automáticamente por Nexus Studio UML\n`;
+    sql += `-- Script DDL generado automaticamente por UML Studio\n`;
     sql += `-- Motor: PostgreSQL 17\n`;
     sql += `-- Base de datos: ${dbName}\n`;
     sql += `-- ==========================================================\n\n`;
 
     // ====== TABLAS ======
     for (const cls of umlJson.classes) {
-      // Verificar si la clase es hija en una relación de herencia
+      // Verificar si la clase es hija en una relacion de herencia
       const generalizationRel = umlJson.relationships?.find((rel: any) => rel.type === 'generalization' && rel.sourceId === cls.id);
       sql += `CREATE TABLE ${cls.name} (\n`;
       const columns: string[] = [];
@@ -46,23 +90,29 @@ export class SqlExportService {
         if (cls.attributes && cls.attributes.length > 0) {
           cls.attributes.forEach((attr: any) => {
             if (attr.name !== parentPkName) {
-              const sqlType = this.typeMap[attr.type] || 'VARCHAR(255)';
+              const sqlType = this.mapToSqlType(attr.type);
               columns.push(`  ${attr.name} ${sqlType}`);
             }
           });
         }
       } else if (!cls.attributes || cls.attributes.length === 0) {
-        columns.push(`  id VARCHAR(255) PRIMARY KEY`);
+        columns.push(`  id BIGSERIAL PRIMARY KEY`);
       } else {
         cls.attributes.forEach((attr: any, index: number) => {
-          const sqlType = this.typeMap[attr.type] || 'VARCHAR(255)';
+          const sqlType = this.mapToSqlType(attr.type);
           let colDef = `  ${attr.name} ${sqlType}`;
           if (index === 0) {
             if (this.invalidPkTypes.has(sqlType)) {
-              columns.push(`  id VARCHAR(255) PRIMARY KEY`);
+              columns.push(`  id BIGSERIAL PRIMARY KEY`);
               columns.push(colDef);
             } else {
-              colDef += ' PRIMARY KEY';
+              if (sqlType === 'BIGINT') {
+                colDef = `  ${attr.name} BIGSERIAL PRIMARY KEY`;
+              } else if (sqlType === 'INT') {
+                colDef = `  ${attr.name} SERIAL PRIMARY KEY`;
+              } else {
+                colDef += ' PRIMARY KEY';
+              }
               columns.push(colDef);
             }
           } else {
@@ -79,7 +129,7 @@ export class SqlExportService {
       const target = umlJson.classes.find((c: any) => c.id === rel.targetId);
       if (!source || !target) continue;
 
-      // Herencia (Generalización): Crear la FK de la tabla hija a la tabla padre con ON DELETE CASCADE
+      // Herencia (Generalizacion): Crear la FK de la tabla hija a la tabla padre con ON DELETE CASCADE
       if (rel.type === 'generalization') {
         const child = source;
         const parent = target;
@@ -94,7 +144,7 @@ export class SqlExportService {
       const multSource = rel.labels?.[0] || '1';
       const multTarget = rel.labels?.[1] || '1';
 
-      // N:M ➔ tabla intermedia
+      // N:M -> tabla intermedia
       if (multSource.includes('*') && multTarget.includes('*')) {
         const joinTable = `${source.name}_${target.name}`;
         const sourcePkName = this.getPrimaryKey(source, umlJson);
@@ -112,7 +162,7 @@ export class SqlExportService {
         continue;
       }
 
-      // Determinar el lado de la FK según multiplicidad
+      // Determinar el lado de la FK segun multiplicidad
       let fkTable = source;
       let refTable = target;
       let fkName = `fk_${source.name.toLowerCase()}_${target.name.toLowerCase()}`;
@@ -132,25 +182,25 @@ export class SqlExportService {
           notNull = '';
         } else {
           if (multSource.includes('*') && !multTarget.includes('*')) {
-            // source: muchos, target: uno ➔ FK en source
+            // source: muchos, target: uno -> FK en source
             fkTable = source;
             refTable = target;
             fkName = `fk_${source.name.toLowerCase()}_${target.name.toLowerCase()}`;
             column = `${target.name.toLowerCase()}_id`;
           } else if (!multSource.includes('*') && multTarget.includes('*')) {
-            // source: uno, target: muchos ➔ FK en target
+            // source: uno, target: muchos -> FK en target
             fkTable = target;
             refTable = source;
             fkName = `fk_${target.name.toLowerCase()}_${source.name.toLowerCase()}`;
             column = `${source.name.toLowerCase()}_id`;
           } else {
-            // 1:1 o caso ambiguo, por convención FK en source
+            // 1:1 o caso ambiguo, por convencion FK en source
             fkTable = source;
             refTable = target;
             fkName = `fk_${source.name.toLowerCase()}_${target.name.toLowerCase()}`;
             column = `${target.name.toLowerCase()}_id`;
           }
-          // Composición: FK NOT NULL y ON DELETE CASCADE
+          // Composicion: FK NOT NULL y ON DELETE CASCADE
           if (rel.type === 'composition') {
             notNull = ' NOT NULL';
             onDelete = 'CASCADE';
@@ -185,7 +235,7 @@ export class SqlExportService {
     if (!cls || !cls.attributes || cls.attributes.length === 0) return 'id';
 
     const firstAttr = cls.attributes[0];
-    const sqlType = this.typeMap[firstAttr.type] || 'VARCHAR(255)';
+    const sqlType = this.mapToSqlType(firstAttr.type);
 
     return this.invalidPkTypes.has(sqlType) ? 'id' : firstAttr.name;
   }
@@ -198,23 +248,25 @@ export class SqlExportService {
         if (parent) return this.getPrimaryKeyType(parent, umlJson);
       }
     }
-    if (!cls || !cls.attributes || cls.attributes.length === 0) return 'VARCHAR(255)';
+    if (!cls || !cls.attributes || cls.attributes.length === 0) return 'BIGINT';
 
     const firstAttr = cls.attributes[0];
-    const sqlType = this.typeMap[firstAttr.type] || 'VARCHAR(255)';
+    const sqlType = this.mapToSqlType(firstAttr.type);
 
-    return this.invalidPkTypes.has(sqlType) ? 'VARCHAR(255)' : sqlType;
+    return this.invalidPkTypes.has(sqlType) ? 'BIGINT' : sqlType;
   }
 
-  downloadSql(umlJson: any, fileName: string = 'diagram.sql'): void {
+  downloadSql(umlJson: any, fileName: string = 'diagrama.sql'): void {
     const sqlContent = this.exportToSql(umlJson);
-    const blob = new Blob([sqlContent], { type: 'text/sql' });
+    const blob = new Blob([sqlContent], { type: 'text/plain;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
 
     const a = document.createElement('a');
     a.href = url;
     a.download = fileName;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
 
     window.URL.revokeObjectURL(url);
   }

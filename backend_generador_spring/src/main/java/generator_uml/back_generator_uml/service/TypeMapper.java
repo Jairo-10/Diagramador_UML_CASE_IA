@@ -6,15 +6,18 @@ public class TypeMapper {
         String s = t.trim().toLowerCase();
 
         return switch (s) {
+            case "void" -> "void";
             case "int", "integer" -> "Integer";
-            case "long" -> "Long";
-            case "string", "varchar", "text", "char" -> "String";
+            case "long", "bigint" -> "Long";
+            case "string", "varchar", "text", "char", "character" -> "String";
             case "bool", "boolean" -> "Boolean";
             case "float" -> "Float";
-            case "double" -> "Double";
-            case "decimal", "numeric", "bigdecimal" -> "BigDecimal";
+            case "double", "real" -> "Double";
+            case "decimal", "numeric", "bigdecimal", "money" -> "BigDecimal";
             case "date", "localdate" -> "LocalDate";
+            case "time", "localtime" -> "LocalTime";
             case "datetime", "timestamp", "localdatetime" -> "LocalDateTime";
+            case "uuid" -> "UUID";
             default -> "String"; // fallback seguro
         };
     }

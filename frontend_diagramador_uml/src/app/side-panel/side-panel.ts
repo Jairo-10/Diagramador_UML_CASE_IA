@@ -221,7 +221,7 @@ export class SidePanel {
         this.umlImageService.loading.set(false);
       },
       error: (err) => {
-        console.error('❌ Error al analizar imagen UML:', err);
+        console.error('[Vision] Error al procesar imagen UML:', err);
         this.analyzingModel.set(false);
         this.umlImageService.loading.set(false);
       }

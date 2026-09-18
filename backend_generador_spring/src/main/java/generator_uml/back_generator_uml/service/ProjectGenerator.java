@@ -445,13 +445,16 @@ public class ProjectGenerator {
                 mm.put("returnType", returnType);
 
                 String defaultReturn = switch (returnType) {
-                    case "int", "long", "short", "byte" -> "0";
-                    case "double", "float" -> "0.0";
-                    case "boolean" -> "false";
-                    case "char" -> "'\\u0000'";
+                    case "void" -> null;
+                    case "int", "long", "short", "byte", "Integer", "Long" -> "0";
+                    case "double", "float", "Double", "Float" -> "0.0";
+                    case "boolean", "Boolean" -> "false";
+                    case "char", "Character" -> "'\\u0000'";
                     default -> "null";
                 };
-                mm.put("defaultReturn", defaultReturn);
+                if (defaultReturn != null) {
+                    mm.put("defaultReturn", defaultReturn);
+                }
                 methods.add(mm);
             }
 

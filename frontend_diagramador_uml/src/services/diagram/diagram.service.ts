@@ -274,7 +274,7 @@ export class DiagramService {
 				this.persist(true);
 			});
 
-			// 👉 Eliminación centralizada de celdas (elementos o relaciones)
+			//  Eliminación centralizada de celdas (elementos o relaciones)
 			this.graph.on('remove', (cell: any, _collection: any, opt: any = {}) => {
 				if (this.isClearingGraph || opt?.collab) return;
 				const isLink = !!cell?.isLink?.();
@@ -293,7 +293,7 @@ export class DiagramService {
 				this.persist(true);
 			});
 
-			// 👉 Redimensionamiento
+			//  Redimensionamiento
 			let pendingResize: { id: string; w: number; h: number } | null = null;
 			const flushResize = () => {
 				if (pendingResize) {
@@ -317,7 +317,7 @@ export class DiagramService {
 				pendingResize = null;
 			});
 
-			// 👉 Edición y movimiento de etiquetas en links
+			//  Edición y movimiento de etiquetas en links
 			let pendingLabelMove: { linkId: string; index: number; position: { distance: number; offset?: number } } | null = null;
 			const flushLabelMove = () => {
 				if (pendingLabelMove) {
@@ -462,14 +462,14 @@ export class DiagramService {
 					this.selectedCell.attr('.connection/stroke-width', 3);
 				}
 			});
-			//👉 Deselect al hacer click en el fondo
+			//  Deselect al hacer click en el fondo
 			this.paper.on('blank:pointerclick', () => this.clearSelection());
 			this.paper.on('cell:pointerdblclick', (cellView: any, _evt: any, _x: number, _y: number) => {
 				const model = cellView.model;
 				if (!model?.isElement?.()) return;
 				this.openClassEditor(model);
 			});
-			//👉 Doble clic en una relación para editar su etiqueta
+			//  Doble clic en una relación para editar su etiqueta
 			this.paper.on('link:pointerdblclick', (linkView: any, evt: MouseEvent, x: number, y: number) => {
 				const model = linkView.model;
 				if (model.get('name') !== 'Relacion') return;
@@ -484,7 +484,7 @@ export class DiagramService {
 					node.setAttribute('stroke-width', '1');
 				}
 			});
-			//👉 Clic derecho en una relación para añadir una nueva etiqueta
+			//  Clic derecho en una relación para añadir una nueva etiqueta
 			this.paper.on('link:contextmenu', (linkView: any, evt: MouseEvent, x: number, y: number) => {
 				evt.preventDefault();
 				const model = linkView.model;
@@ -506,7 +506,7 @@ export class DiagramService {
 				model.appendLabel(newLabel);
 				const newIndex = model.labels().length - 1;
 
-				// 👇 difundir con el objeto completo
+				//  difundir con el objeto completo
 				this.collab.broadcast({
 				t: 'add_label',
 				linkId: model.id,
@@ -516,7 +516,7 @@ export class DiagramService {
 				this.edition.startEditingLabel(model, this.paper, newIndex, 'label', x, y, this.collab,this.graph);
 			});
 
-			// 👉 Mostrar botón de eliminación 'X' exactamente en el centro (50% / 0.5) de la relación
+			//  Mostrar botón de eliminación 'X' exactamente en el centro (50% / 0.5) de la relación
 			this.paper.on('link:mouseenter', (linkView: any) => {
 				if (!this.joint?.linkTools?.Remove) return;
 				const removeButton = new this.joint.linkTools.Remove({
@@ -567,7 +567,7 @@ export class DiagramService {
 			this.paper.translate(this.pan.x, this.pan.y);
 
 
-			// 👉 inicializa colaboración **ANTES** de salir
+			//  inicializa colaboración **ANTES** de salir
 			this.collab.registerDiagramApi({
 				getGraph: () => this.graph,
 				getJoint: () => this.joint,
@@ -595,7 +595,7 @@ export class DiagramService {
 					const json: UmlExportDTO = JSON.parse(saved);
 					if (json && Array.isArray(json.classes) && json.classes.length > 0) {
 						this.loadFromJson(json, false);
-						console.log('⚡ Render previo optimista desde localStorage.');
+						console.log('[Cache] Render previo desde localStorage.');
 					}
 				} catch (err) {
 					console.warn('Error leyendo localStorage:', err);
@@ -607,7 +607,7 @@ export class DiagramService {
 				next: (data) => {
 					if (data && Array.isArray(data.classes)) {
 						this.loadFromJson(data, true);
-						console.log('📥 Diagrama sincronizado autoritativamente desde PostgreSQL.');
+						console.log('[Sync] Diagrama sincronizado desde PostgreSQL.');
 					}
 				},
 				error: (err) => console.log('Sala sin respaldo previo en BD:', err)
@@ -645,7 +645,7 @@ export class DiagramService {
 			source: sourceId ? { id: sourceId } : undefined,
 			target: targetId ? { id: targetId } : undefined,
 			attrs: {
-				'.connection': { stroke: '#1e293b', 'stroke-width': 2 },
+				'.connection': { stroke: '#1e293b', 'stroke-width': 2, fill: 'none' },
 				'.marker-target': { fill: '#1e293b', stroke: '#1e293b', d: 'M 10 0 L 0 5 L 10 10 z' }
 			},
 			labels: [
@@ -682,11 +682,11 @@ export class DiagramService {
 
 	private readonly relationAttrs: any = {
 		association: {
-			'.connection': { stroke: '#1e293b', 'stroke-width': 2 },
+			'.connection': { stroke: '#1e293b', 'stroke-width': 2, fill: 'none' },
 			'.marker-target': { fill: '#1e293b', stroke: '#1e293b', d: 'M 10 0 L 0 5 L 10 10 z' }
 		},
 		generalization: {
-			'.connection': { stroke: '#1e293b', 'stroke-width': 2 },
+			'.connection': { stroke: '#1e293b', 'stroke-width': 2, fill: 'none' },
 			'.marker-target': {
 				d: 'M 20 0 L 0 10 L 20 20 z',
 				fill: '#ffffff',
@@ -695,7 +695,7 @@ export class DiagramService {
 			}
 		},
 		aggregation: {
-			'.connection': { stroke: '#1e293b', 'stroke-width': 2 },
+			'.connection': { stroke: '#1e293b', 'stroke-width': 2, fill: 'none' },
 			'.marker-source': {
 				d: 'M 0 10 L 10 0 L 20 10 L 10 20 z',
 				fill: '#ffffff',
@@ -704,7 +704,7 @@ export class DiagramService {
 			}
 		},
 		composition: {
-			'.connection': { stroke: '#1e293b', 'stroke-width': 2 },
+			'.connection': { stroke: '#1e293b', 'stroke-width': 2, fill: 'none' },
 			'.marker-source': {
 				d: 'M 0 10 L 10 0 L 20 10 L 10 20 z',
 				fill: '#1e293b',
@@ -712,7 +712,7 @@ export class DiagramService {
 			}
 		},
 		dependency: {
-			'.connection': { stroke: '#d97706', 'stroke-width': 2, 'stroke-dasharray': '5 3' },
+			'.connection': { stroke: '#d97706', 'stroke-width': 2, 'stroke-dasharray': '5 3', fill: 'none' },
 			'.marker-target': {
 				d: 'M 10 0 L 0 5 L 10 10 z',
 				fill: '#d97706',
@@ -737,7 +737,7 @@ export class DiagramService {
 		const link = new this.joint.dia.Link({
 			id: linkId || undefined,
 			name: 'Relacion',
-			relationType: type,             // 👈 guarda el tipo
+			relationType: type,             //  guarda el tipo
 			source: { id: sourceId },
 			target: { id: targetId },
 			attrs
@@ -775,7 +775,7 @@ export class DiagramService {
 		}
 
 		if (!remote) {
-			this.graph.addCell(link);       // 👈 disparará 'add' → broadcast
+			this.graph.addCell(link);       //  disparará 'add' → broadcast
 			this.persist(true);
 		}
 		return link;
@@ -856,9 +856,9 @@ export class DiagramService {
 			if (!this.joint || !this.graph) {
 				throw new Error('JointJS no está inicializado');
 			}
-			// 👇 Forzar la creación del namespace custom
+			//  Forzar la creación del namespace custom
 			this.createUmlNamespace();
-			// 🔹 Normalizar atributos/métodos a texto multilinea
+			//  Normalizar atributos/métodos a texto multilinea
 			const attributesText = Array.isArray(classModel.attributes)
 				? classModel.attributes.map(a => `${a.name}: ${a.type}`).join('\n')
 				: (classModel.attributes || '');
@@ -869,7 +869,7 @@ export class DiagramService {
 						return `${m.name}${params}${ret};`;
 					}).join('\n')
 				: (classModel.methods || '');
-			// 👇 Usar la clase custom con tamaño base compacto
+			//  Usar la clase custom con tamaño base compacto
 			const umlClass = new this.joint.shapes.custom.UMLClass({
 				position: classModel.position || { x: 100, y: 100 },
 				size: classModel.size || { width: 160, height: 90 },
@@ -877,13 +877,13 @@ export class DiagramService {
 				attributes: attributesText,
 				methods: methodsText,
 			});
-			// 🔹 Asignar ID remoto si viene del payload
+			//  Asignar ID remoto si viene del payload
 			if (classModel.id) {
 				umlClass.set('id', classModel.id);
 			} else {
 				umlClass.set('id', uuid());
 			}
-			// 🔹 Añadimos 4 puertos (uno por cada lado)
+			//  Añadimos 4 puertos (uno por cada lado)
 			umlClass.addPort({ group: 'inout', id: 'top' });
 			umlClass.addPort({ group: 'inout', id: 'bottom' });
 			umlClass.addPort({ group: 'inout', id: 'left' });
@@ -892,12 +892,12 @@ export class DiagramService {
 			umlClass.on('change:name change:attributes change:methods', () => {
 				this.edition.autoResizeUmlClass(umlClass, this.paper);
 			});
-			// 🔹 Auto-ajuste métrico sincronizado antes y después de insertar
+			//  Auto-ajuste métrico sincronizado antes y después de insertar
 			this.edition.autoResizeUmlClass(umlClass, this.paper);
 			this.graph.addCell(umlClass);
 			this.edition.scheduleAutoResize(umlClass, this.paper);
 			umlClass.toFront();
-			// 🔹 Difundir creación SOLO si fue local
+			//  Difundir creación SOLO si fue local
 			if (!remote) {
 				this.collab.broadcast({
 					t: 'add_class',
@@ -1093,7 +1093,7 @@ export class DiagramService {
 			source: sourceId ? { id: sourceId } : undefined,
 			target: targetId ? { id: targetId } : undefined,
 			attrs: {
-				'.connection': { stroke: '#333333', 'stroke-width': 2 },
+				'.connection': { stroke: '#333333', 'stroke-width': 2, fill: 'none' },
 				'.marker-target': { fill: '#333333', d: 'M 10 0 L 0 5 L 10 10 z' },
 			},
 			labels: [
@@ -1303,8 +1303,8 @@ export class DiagramService {
 				// Exportar en el instante exacto del envío HTTP
 				const currentJson = this.exportService.export(this.graph);
 				this.backup.setBackupUml(this.currentRoomId, currentJson).subscribe({
-					next: () => console.log('💾 Guardado inmediato sincronizado en PostgreSQL.'),
-					error: (err) => console.warn('⚠️ Error en sync PostgreSQL:', err)
+					next: () => console.log('[Sync] Guardado sincronizado en PostgreSQL.'),
+					error: (err) => console.warn('[Sync] Error en sincronización PostgreSQL:', err)
 				});
 			} else {
 				this.saveTimeout = setTimeout(() => {
@@ -1313,8 +1313,8 @@ export class DiagramService {
 					if (!this.graph || this.isClearingGraph) return;
 					const delayedJson = this.exportService.export(this.graph);
 					this.backup.setBackupUml(this.currentRoomId!, delayedJson).subscribe({
-						next: () => console.log('💾 Auto-guardado sincronizado en PostgreSQL.'),
-						error: (err) => console.warn('⚠️ Error en auto-sync PostgreSQL:', err)
+						next: () => console.log('[AutoSync] Diagrama guardado en PostgreSQL.'),
+						error: (err) => console.warn('[AutoSync] Error en auto-sync PostgreSQL:', err)
 					});
 				}, 500);
 			}
@@ -1328,8 +1328,8 @@ export class DiagramService {
 		const snapshot = this.exportToJson();
 		if (snapshot && Array.isArray(snapshot.classes) && snapshot.classes.length > 0) {
 			this.backup.setBackupUml(roomId, snapshot).subscribe({
-				next: () => console.log('✅ Backup enviado al backend para sala:', roomId),
-				error: (err) => console.error('❌ Error enviando backup:', err)
+				next: () => console.log('[Backup] Snapshot enviado para sala:', roomId),
+				error: (err) => console.error('[Backup] Error enviando snapshot:', err)
 			});
 		}
 
@@ -1424,10 +1424,20 @@ export class DiagramService {
 			defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
 			svgElement.insertBefore(defs, svgElement.firstChild);
 		}
+		// Forzar fill="none" en todos los paths de líneas y conexiones para evitar rellenos negros en enlaces recursivos
+		svgElement.querySelectorAll('.connection, .connection-wrap, path').forEach(el => {
+			if (!el.classList.contains('marker-target') && !el.classList.contains('marker-source')) {
+				el.setAttribute('fill', 'none');
+			}
+		});
+
 		const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
 		styleEl.textContent = `
 			text {
 				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+			}
+			.connection, path.connection {
+				fill: none !important;
 			}
 		`;
 		defs.appendChild(styleEl);
