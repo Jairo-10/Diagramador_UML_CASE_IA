@@ -16,17 +16,33 @@ public class GenerateController {
 
     private final ProjectGenerator projectGenerator;
 
-    @PostMapping(produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<byte[]> generate(@RequestBody UmlSchema schema,
-                                           @RequestParam(defaultValue = "com.example.genapp") String basePackage,
-                                           @RequestParam(defaultValue = "generated-app") String artifactId) throws Exception {
-        Path zipPath = projectGenerator.generate(schema, basePackage, artifactId);
-        byte[] bytes = Files.readAllBytes(zipPath);
+    @PostMapping(produces = {MediaType.APPLICATION_OCTET_STREAM_VALUE, MediaType.TEXT_PLAIN_VALUE})
+    public ResponseEntity<?> generate(@RequestBody(required = false) UmlSchema schema,
+                                      @RequestParam(defaultValue = "com.example.genapp") String basePackage,
+                                      @RequestParam(defaultValue = "generated-app") String artifactId) {
+        if (schema == null || schema.getClasses() == null || schema.getClasses().isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body("El esquema UML recibido no contiene clases para generar el proyecto.");
+        }
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + artifactId + ".zip")
-                .body(bytes);
+        Path zipPath = null;
+        try {
+            zipPath = projectGenerator.generate(schema, basePackage, artifactId);
+            byte[] bytes = Files.readAllBytes(zipPath);
+
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + artifactId + ".zip")
+                    .body(bytes);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Error al sintetizar el proyecto backend: " + e.getMessage());
+        } finally {
+            if (zipPath != null) {
+                try {
+                    Files.deleteIfExists(zipPath);
+                } catch (Exception ignored) {}
+            }
+        }
     }
-
 }
 

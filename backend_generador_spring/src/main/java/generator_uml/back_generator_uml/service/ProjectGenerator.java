@@ -9,9 +9,20 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.zeroturnaround.zip.ZipUtil;
 
-import java.io.*;
-import java.nio.file.*;
-import java.util.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -75,20 +86,14 @@ public class ProjectGenerator {
                         || "composition".equals(rel.getType())
                         || "dependency".equals(rel.getType())) {
                     
-                    String sourceName = schema.getClasses().stream()
-                            .filter(cl -> cl.getId().equals(rel.getSourceId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
-
-                    String targetName = schema.getClasses().stream()
-                            .filter(cl -> cl.getId().equals(rel.getTargetId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
+                    String sourceName = findClassNameById(schema, rel.getSourceId());
+                    String targetName = findClassNameById(schema, rel.getTargetId());
 
                     if (sourceName == null || targetName == null) continue;
 
-                    String sourceCard = rel.getLabels().size() > 0 ? rel.getLabels().get(0).trim() : "";
-                    String targetCard = rel.getLabels().size() > 1 ? rel.getLabels().get(1).trim() : "";
+                    List<String> labels = rel.getLabels();
+                    String sourceCard = (labels != null && !labels.isEmpty() && labels.get(0) != null) ? labels.get(0).trim() : "";
+                    String targetCard = (labels != null && labels.size() > 1 && labels.get(1) != null) ? labels.get(1).trim() : "";
 
                     if (sourceCard.isEmpty() && "dependency".equals(rel.getType())) {
                         sourceCard = "*";
@@ -185,12 +190,8 @@ public class ProjectGenerator {
             if (schema.getRelationships() != null) {
                 for (var rel : schema.getRelationships()) {
                     if ("generalization".equals(rel.getType()) && rel.getSourceId().equals(c.getId())) {
-                        parentClass = schema.getClasses().stream()
-                                .filter(pc -> pc.getId().equals(rel.getTargetId()))
-                                .map(UmlClass::getName)
-                                .map(NamingUtil::toJavaClass)
-                                .findFirst()
-                                .orElse(null);
+                        String pName = findClassNameById(schema, rel.getTargetId());
+                        parentClass = pName != null ? NamingUtil.toJavaClass(pName) : null;
                     }
                 }
             }
@@ -264,15 +265,8 @@ public class ProjectGenerator {
 
             if (schema.getRelationships() != null) {
                 for (var rel : schema.getRelationships()) {
-                    String sourceName = schema.getClasses().stream()
-                            .filter(cl -> cl.getId().equals(rel.getSourceId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
-
-                    String targetName = schema.getClasses().stream()
-                            .filter(cl -> cl.getId().equals(rel.getTargetId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
+                    String sourceName = findClassNameById(schema, rel.getSourceId());
+                    String targetName = findClassNameById(schema, rel.getTargetId());
 
                     if (sourceName == null || targetName == null) continue;
 
@@ -289,12 +283,12 @@ public class ProjectGenerator {
                             || "composition".equals(rel.getType())
                             || "dependency".equals(rel.getType())) {
 
-                        // 1) Normalizar etiquetas (vacías -> "1")
-                        String rawSource = (rel.getLabels().size() > 0 && rel.getLabels().get(0) != null)
-                                ? rel.getLabels().get(0).trim()
+                        List<String> labels = rel.getLabels();
+                        String rawSource = (labels != null && !labels.isEmpty() && labels.get(0) != null)
+                                ? labels.get(0).trim()
                                 : "";
-                        String rawTarget = (rel.getLabels().size() > 1 && rel.getLabels().get(1) != null)
-                                ? rel.getLabels().get(1).trim()
+                        String rawTarget = (labels != null && labels.size() > 1 && labels.get(1) != null)
+                                ? labels.get(1).trim()
                                 : "";
 
                         String sourceCard = rawSource.isEmpty() ? "*" : rawSource;
@@ -431,14 +425,14 @@ public class ProjectGenerator {
                                 .map(a -> NamingUtil.toField(a.getName()))
                                 .collect(Collectors.toSet());
 
-                        attrs.removeIf(a -> parentAttrs.contains((String) a.get("name")));
+                        attrs.removeIf(a -> parentAttrs.contains(String.valueOf(a.get("name"))));
                     }
                 }
             }
 
             // ====== ELIMINAR placeholders “xxxId” si hubo relaciones que los sustituyen ======
             if (!fkPlaceholderNames.isEmpty()) {
-                attrs.removeIf(a -> fkPlaceholderNames.contains(((String) a.get("name")).toLowerCase()));
+                attrs.removeIf(a -> fkPlaceholderNames.contains(String.valueOf(a.get("name")).toLowerCase()));
             }
 
             // ====== MÉTODOS VACÍOS ======
@@ -464,8 +458,8 @@ public class ProjectGenerator {
                 methods.add(mm);
             }
 
-            boolean isParent = schema.getRelationships().stream()
-                    .anyMatch(r -> "generalization".equals(r.getType()) && r.getTargetId().equals(c.getId()));
+            boolean isParent = schema.getRelationships() != null && schema.getRelationships().stream()
+                    .anyMatch(r -> r != null && "generalization".equals(r.getType()) && c.getId().equals(r.getTargetId()));
 
             // ====== CONTEXTO MUSTACHE ======
             Map<String, Object> entityCtx = new HashMap<>();
@@ -492,7 +486,7 @@ public class ProjectGenerator {
                         .findFirst()
                         .orElse(null);
 
-                UmlAttribute parentPkAttr = findPrimaryKeyAttribute(parent);
+                UmlAttribute parentPkAttr = parent != null ? findPrimaryKeyAttribute(parent) : null;
                 if (parentPkAttr != null && parentPkAttr.getName() != null) {
                     String rawParentPkName = parentPkAttr.getName().trim();
                     String parentPkName = !rawParentPkName.isEmpty() ? NamingUtil.toField(rawParentPkName) : "id";
@@ -545,7 +539,7 @@ public class ProjectGenerator {
 
         // ====== GENERAR ENTIDADES INTERMEDIAS ======
         for (Map<String, Object> intermediateCtx : intermediateEntities) {
-            String intermediateEntityName = (String) intermediateCtx.get("EntityName");
+            String intermediateEntityName = String.valueOf(intermediateCtx.get("EntityName"));
             render("Entity.mustache", intermediateCtx, modelDir.resolve(intermediateEntityName + ".java"));
             render("Repository.mustache", intermediateCtx, repoDir.resolve(intermediateEntityName + "Repository.java"));
             render("Service.mustache", intermediateCtx, svcDir.resolve(intermediateEntityName + "Service.java"));
@@ -567,7 +561,13 @@ public class ProjectGenerator {
 
             if (Files.exists(localMvnw)) {
                 Files.copy(localMvnw, root.resolve("mvnw"), StandardCopyOption.REPLACE_EXISTING);
-                root.resolve("mvnw").toFile().setExecutable(true);
+                File mvnwFile = root.resolve("mvnw").toFile();
+                if (mvnwFile.exists()) {
+                    boolean ignored = mvnwFile.setExecutable(true);
+                    if (!ignored) {
+                        // Permiso informativo
+                    }
+                }
             }
             if (Files.exists(localMvnwCmd)) {
                 Files.copy(localMvnwCmd, root.resolve("mvnw.cmd"), StandardCopyOption.REPLACE_EXISTING);
@@ -633,8 +633,20 @@ public class ProjectGenerator {
 
     private void render(String template, Map<String, Object> ctx, Path target) throws IOException {
         Mustache mustache = mustacheFactory.compile("templates/" + template);
-        try (Writer w = new FileWriter(target.toFile())) {
+        try (Writer w = Files.newBufferedWriter(target, StandardCharsets.UTF_8)) {
             mustache.execute(w, ctx).flush();
         }
+    }
+
+    private String findClassNameById(UmlSchema schema, String id) {
+        if (schema == null || schema.getClasses() == null || id == null) {
+            return null;
+        }
+        for (UmlClass c : schema.getClasses()) {
+            if (c != null && id.equals(c.getId())) {
+                return c.getName();
+            }
+        }
+        return null;
     }
 }

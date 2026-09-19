@@ -2,13 +2,19 @@ package generator_uml.back_generator_uml.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.*;
-import generator_uml.back_generator_uml.entity.*;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import generator_uml.back_generator_uml.entity.UmlAttribute;
+import generator_uml.back_generator_uml.entity.UmlClass;
+import generator_uml.back_generator_uml.entity.UmlSchema;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Service
 public class PostmanCollectionGenerator {
@@ -34,7 +40,7 @@ public class PostmanCollectionGenerator {
         ArrayNode items = collection.putArray("item");
 
         // ====== DETECTAR ENTIDADES INTERMEDIAS PARA MANYTOMANY ======
-        java.util.Set<String> intermediateEntities = new java.util.HashSet<>();
+        Set<String> intermediateEntities = new HashSet<>();
         if (schema.getRelationships() != null) {
             for (var rel : schema.getRelationships()) {
                 if ("association".equals(rel.getType())
@@ -42,20 +48,14 @@ public class PostmanCollectionGenerator {
                         || "composition".equals(rel.getType())
                         || "dependency".equals(rel.getType())) {
                     
-                    String sourceName = schema.getClasses().stream()
-                            .filter(cl -> cl.getId().equals(rel.getSourceId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
-
-                    String targetName = schema.getClasses().stream()
-                            .filter(cl -> cl.getId().equals(rel.getTargetId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
+                    String sourceName = findClassNameById(schema, rel.getSourceId());
+                    String targetName = findClassNameById(schema, rel.getTargetId());
 
                     if (sourceName == null || targetName == null) continue;
 
-                    String sourceCard = rel.getLabels().size() > 0 ? rel.getLabels().get(0).trim() : "";
-                    String targetCard = rel.getLabels().size() > 1 ? rel.getLabels().get(1).trim() : "";
+                    List<String> labels = rel.getLabels();
+                    String sourceCard = (labels != null && !labels.isEmpty() && labels.get(0) != null) ? labels.get(0).trim() : "";
+                    String targetCard = (labels != null && labels.size() > 1 && labels.get(1) != null) ? labels.get(1).trim() : "";
 
                     if (sourceCard.isEmpty() && "dependency".equals(rel.getType())) {
                         sourceCard = "*";
@@ -94,32 +94,33 @@ public class PostmanCollectionGenerator {
             String pkName = "id";
             
             // Detectar si tiene padre (herencia)
-            final String[] parentClassNameHolder = {null};
-            for (var rel : schema.getRelationships()) {
-                if ("generalization".equals(rel.getType()) && rel.getSourceId().equals(c.getId())) {
-                    parentClassNameHolder[0] = schema.getClasses().stream()
-                            .filter(pc -> pc.getId().equals(rel.getTargetId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
-                    break;
+            String parentClassName = null;
+            if (schema.getRelationships() != null) {
+                for (var rel : schema.getRelationships()) {
+                    if (rel != null && "generalization".equals(rel.getType()) && c.getId().equals(rel.getSourceId())) {
+                        parentClassName = findClassNameById(schema, rel.getTargetId());
+                        break;
+                    }
                 }
             }
             
             // Si tiene padre, buscar PK en el padre
-            if (parentClassNameHolder[0] != null) {
-                final String parentClassName = parentClassNameHolder[0];
+            if (parentClassName != null) {
+                final String finalParentClassName = parentClassName;
                 UmlClass parent = schema.getClasses().stream()
-                        .filter(pc -> pc.getName().equals(parentClassName))
+                        .filter(pc -> pc != null && pc.getName() != null && pc.getName().equals(finalParentClassName))
                         .findFirst().orElse(null);
                 
-                UmlAttribute parentPkAttr = ProjectGenerator.findPrimaryKeyAttribute(parent);
-                if (parentPkAttr != null) {
-                    pkName = NamingUtil.toField(parentPkAttr.getName());
-                    pkType = TypeMapper.toJava(parentPkAttr.getType());
+                if (parent != null) {
+                    UmlAttribute parentPkAttr = ProjectGenerator.findPrimaryKeyAttribute(parent);
+                    if (parentPkAttr != null && parentPkAttr.getName() != null) {
+                        pkName = NamingUtil.toField(parentPkAttr.getName());
+                        pkType = TypeMapper.toJava(parentPkAttr.getType());
+                    }
                 }
-            } else if (!c.getAttributes().isEmpty()) {
+            } else if (c.getAttributes() != null && !c.getAttributes().isEmpty()) {
                 UmlAttribute pkAttr = ProjectGenerator.findPrimaryKeyAttribute(c);
-                if (pkAttr != null) {
+                if (pkAttr != null && pkAttr.getName() != null) {
                     pkName = NamingUtil.toField(pkAttr.getName());
                     pkType = TypeMapper.toJava(pkAttr.getType());
                 }
@@ -206,7 +207,7 @@ public class PostmanCollectionGenerator {
         ObjectNode requestDetails = request.putObject("request");
         requestDetails.put("method", "GET");
 
-        String exampleId = pkType.equals("String") ? "example-id" : "1";
+        String exampleId = "String".equals(pkType) ? "example-id" : "1";
         ObjectNode url = requestDetails.putObject("url");
         url.put("raw", "{{baseUrl}}/api/" + pluralName + "/" + exampleId);
         ArrayNode host = url.putArray("host");
@@ -259,7 +260,7 @@ public class PostmanCollectionGenerator {
         body.put("mode", "raw");
         body.put("raw", generateSampleBody(c, schema, false));
 
-        String exampleId = pkType.equals("String") ? "example-id" : "1";
+        String exampleId = "String".equals(pkType) ? "example-id" : "1";
         ObjectNode url = requestDetails.putObject("url");
         url.put("raw", "{{baseUrl}}/api/" + pluralName + "/" + exampleId);
         ArrayNode host = url.putArray("host");
@@ -277,7 +278,7 @@ public class PostmanCollectionGenerator {
         ObjectNode requestDetails = request.putObject("request");
         requestDetails.put("method", "DELETE");
 
-        String exampleId = pkType.equals("String") ? "example-id" : "1";
+        String exampleId = "String".equals(pkType) ? "example-id" : "1";
         ObjectNode url = requestDetails.putObject("url");
         url.put("raw", "{{baseUrl}}/api/" + pluralName + "/" + exampleId);
         ArrayNode host = url.putArray("host");
@@ -328,7 +329,7 @@ public class PostmanCollectionGenerator {
         body.put("mode", "raw");
         body.put("raw", generateIntermediateEntityBody(intermediateEntityName, schema, false));
 
-        String exampleId = pkType.equals("String") ? "example-id" : "1";
+        String exampleId = "String".equals(pkType) ? "example-id" : "1";
         ObjectNode url = requestDetails.putObject("url");
         url.put("raw", "{{baseUrl}}/api/" + pluralName + "/" + exampleId);
         ArrayNode host = url.putArray("host");
@@ -358,12 +359,8 @@ public class PostmanCollectionGenerator {
         if (schema.getRelationships() != null) {
             for (var rel : schema.getRelationships()) {
                 if ("generalization".equals(rel.getType()) && rel.getSourceId().equals(c.getId())) {
-                    parentClass = schema.getClasses().stream()
-                            .filter(pc -> pc.getId().equals(rel.getTargetId()))
-                            .map(UmlClass::getName)
-                            .map(NamingUtil::toJavaClass)
-                            .findFirst()
-                            .orElse(null);
+                    String pName = findClassNameById(schema, rel.getTargetId());
+                    parentClass = pName != null ? NamingUtil.toJavaClass(pName) : null;
                 }
             }
         }
@@ -411,20 +408,14 @@ public class PostmanCollectionGenerator {
         // Relaciones ManyToOne o OneToOne: incluir solo el ID de la relación
         if (schema.getRelationships() != null) {
             for (var rel : schema.getRelationships()) {
-                String sourceName = schema.getClasses().stream()
-                        .filter(cl -> cl.getId().equals(rel.getSourceId()))
-                        .map(UmlClass::getName)
-                        .findFirst().orElse(null);
-
-                String targetName = schema.getClasses().stream()
-                        .filter(cl -> cl.getId().equals(rel.getTargetId()))
-                        .map(UmlClass::getName)
-                        .findFirst().orElse(null);
+                String sourceName = findClassNameById(schema, rel.getSourceId());
+                String targetName = findClassNameById(schema, rel.getTargetId());
 
                 if (sourceName == null || targetName == null) continue;
 
-                String sourceCard = rel.getLabels().size() > 0 ? rel.getLabels().get(0).trim() : "";
-                String targetCard = rel.getLabels().size() > 1 ? rel.getLabels().get(1).trim() : "";
+                List<String> labels = rel.getLabels();
+                String sourceCard = (labels != null && !labels.isEmpty() && labels.get(0) != null) ? labels.get(0).trim() : "";
+                String targetCard = (labels != null && labels.size() > 1 && labels.get(1) != null) ? labels.get(1).trim() : "";
 
                 if ("dependency".equals(rel.getType()) && sourceCard.isEmpty() && targetCard.isEmpty()) {
                     sourceCard = "*";
@@ -454,13 +445,15 @@ public class PostmanCollectionGenerator {
                         String fieldName = NamingUtil.toField(targetEntity) + "id";
 
                         UmlClass targetClass = schema.getClasses().stream()
-                                .filter(tc -> tc.getName().equals(targetName))
+                                .filter(tc -> tc != null && tc.getName() != null && tc.getName().equals(targetName))
                                 .findFirst().orElse(null);
 
-                        UmlAttribute targetPk = ProjectGenerator.findPrimaryKeyAttribute(targetClass);
-                        if (targetPk != null && targetPk.getType() != null) {
-                            String targetPkType = TypeMapper.toJava(targetPk.getType());
-                            body.set(fieldName, generateSampleValue(targetPkType, fieldName));
+                        if (targetClass != null) {
+                            UmlAttribute targetPk = ProjectGenerator.findPrimaryKeyAttribute(targetClass);
+                            if (targetPk != null && targetPk.getType() != null) {
+                                String targetPkType = TypeMapper.toJava(targetPk.getType());
+                                body.set(fieldName, generateSampleValue(targetPkType, fieldName));
+                            }
                         }
                     }
                     // Si source tiene cardinalidad 1 y target tiene 1 (OneToOne o Composition)
@@ -469,13 +462,15 @@ public class PostmanCollectionGenerator {
                         String fieldName = NamingUtil.toField(targetEntity) + "id";
 
                         UmlClass targetClass = schema.getClasses().stream()
-                                .filter(tc -> tc.getName().equals(targetName))
+                                .filter(tc -> tc != null && tc.getName() != null && tc.getName().equals(targetName))
                                 .findFirst().orElse(null);
 
-                        UmlAttribute targetPk = ProjectGenerator.findPrimaryKeyAttribute(targetClass);
-                        if (targetPk != null && targetPk.getType() != null) {
-                            String targetPkType = TypeMapper.toJava(targetPk.getType());
-                            body.set(fieldName, generateSampleValue(targetPkType, fieldName));
+                        if (targetClass != null) {
+                            UmlAttribute targetPk = ProjectGenerator.findPrimaryKeyAttribute(targetClass);
+                            if (targetPk != null && targetPk.getType() != null) {
+                                String targetPkType = TypeMapper.toJava(targetPk.getType());
+                                body.set(fieldName, generateSampleValue(targetPkType, fieldName));
+                            }
                         }
                     }
                     // Si source=many y target=many → ManyToMany
@@ -497,13 +492,15 @@ public class PostmanCollectionGenerator {
                         String fieldName = NamingUtil.toField(sourceEntity) + "id";
 
                         UmlClass sourceClass = schema.getClasses().stream()
-                                .filter(sc -> sc.getName().equals(sourceName))
+                                .filter(sc -> sc != null && sc.getName() != null && sc.getName().equals(sourceName))
                                 .findFirst().orElse(null);
 
-                        UmlAttribute sourcePk = ProjectGenerator.findPrimaryKeyAttribute(sourceClass);
-                        if (sourcePk != null && sourcePk.getType() != null) {
-                            String sourcePkType = TypeMapper.toJava(sourcePk.getType());
-                            body.set(fieldName, generateSampleValue(sourcePkType, fieldName));
+                        if (sourceClass != null) {
+                            UmlAttribute sourcePk = ProjectGenerator.findPrimaryKeyAttribute(sourceClass);
+                            if (sourcePk != null && sourcePk.getType() != null) {
+                                String sourcePkType = TypeMapper.toJava(sourcePk.getType());
+                                body.set(fieldName, generateSampleValue(sourcePkType, fieldName));
+                            }
                         }
                     }
                     // Si target=many y source=many → ManyToMany
@@ -526,7 +523,8 @@ public class PostmanCollectionGenerator {
         // Necesitamos extraer las dos entidades originales
         // Buscamos en el schema las relaciones ManyToMany que generan esta entidad intermedia
         
-        final String[] entityNames = {null, null}; // [0] = first, [1] = second
+        String firstEntityName = null;
+        String secondEntityName = null;
         
         if (schema.getRelationships() != null) {
             for (var rel : schema.getRelationships()) {
@@ -535,20 +533,14 @@ public class PostmanCollectionGenerator {
                         || "composition".equals(rel.getType())
                         || "dependency".equals(rel.getType())) {
                     
-                    String sourceName = schema.getClasses().stream()
-                            .filter(cl -> cl.getId().equals(rel.getSourceId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
-
-                    String targetName = schema.getClasses().stream()
-                            .filter(cl -> cl.getId().equals(rel.getTargetId()))
-                            .map(UmlClass::getName)
-                            .findFirst().orElse(null);
+                    String sourceName = findClassNameById(schema, rel.getSourceId());
+                    String targetName = findClassNameById(schema, rel.getTargetId());
 
                     if (sourceName == null || targetName == null) continue;
 
-                    String sourceCard = rel.getLabels().size() > 0 ? rel.getLabels().get(0).trim() : "";
-                    String targetCard = rel.getLabels().size() > 1 ? rel.getLabels().get(1).trim() : "";
+                    List<String> labels = rel.getLabels();
+                    String sourceCard = (labels != null && !labels.isEmpty() && labels.get(0) != null) ? labels.get(0).trim() : "";
+                    String targetCard = (labels != null && labels.size() > 1 && labels.get(1) != null) ? labels.get(1).trim() : "";
 
                     if (sourceCard.isEmpty() && "dependency".equals(rel.getType())) {
                         sourceCard = "*";
@@ -568,8 +560,8 @@ public class PostmanCollectionGenerator {
                         String candidateName = firstEntity + secondEntity;
                         
                         if (candidateName.equals(intermediateEntityName)) {
-                            entityNames[0] = firstEntity;
-                            entityNames[1] = secondEntity;
+                            firstEntityName = firstEntity;
+                            secondEntityName = secondEntity;
                             break;
                         }
                     }
@@ -578,30 +570,37 @@ public class PostmanCollectionGenerator {
         }
 
         // Generar los campos de FK para las dos entidades
-        if (entityNames[0] != null && entityNames[1] != null) {
-            String firstFieldName = NamingUtil.toField(entityNames[0]) + "id";
-            String secondFieldName = NamingUtil.toField(entityNames[1]) + "id";
+        if (firstEntityName != null && secondEntityName != null) {
+            String firstFieldName = NamingUtil.toField(firstEntityName) + "id";
+            String secondFieldName = NamingUtil.toField(secondEntityName) + "id";
+            
+            final String finalFirstEntity = firstEntityName;
+            final String finalSecondEntity = secondEntityName;
             
             // Obtener el tipo de PK de cada entidad
             UmlClass firstClass = schema.getClasses().stream()
-                    .filter(c -> NamingUtil.toJavaClass(c.getName()).equals(entityNames[0]))
+                    .filter(c -> NamingUtil.toJavaClass(c.getName()).equals(finalFirstEntity))
                     .findFirst().orElse(null);
             
             UmlClass secondClass = schema.getClasses().stream()
-                    .filter(c -> NamingUtil.toJavaClass(c.getName()).equals(entityNames[1]))
+                    .filter(c -> NamingUtil.toJavaClass(c.getName()).equals(finalSecondEntity))
                     .findFirst().orElse(null);
             
             String firstPkType = "Long";
             String secondPkType = "Long";
             
-            UmlAttribute firstPk = ProjectGenerator.findPrimaryKeyAttribute(firstClass);
-            if (firstPk != null && firstPk.getType() != null) {
-                firstPkType = TypeMapper.toJava(firstPk.getType());
+            if (firstClass != null) {
+                UmlAttribute firstPk = ProjectGenerator.findPrimaryKeyAttribute(firstClass);
+                if (firstPk != null && firstPk.getType() != null) {
+                    firstPkType = TypeMapper.toJava(firstPk.getType());
+                }
             }
             
-            UmlAttribute secondPk = ProjectGenerator.findPrimaryKeyAttribute(secondClass);
-            if (secondPk != null && secondPk.getType() != null) {
-                secondPkType = TypeMapper.toJava(secondPk.getType());
+            if (secondClass != null) {
+                UmlAttribute secondPk = ProjectGenerator.findPrimaryKeyAttribute(secondClass);
+                if (secondPk != null && secondPk.getType() != null) {
+                    secondPkType = TypeMapper.toJava(secondPk.getType());
+                }
             }
             
             body.set(firstFieldName, generateSampleValue(firstPkType, firstFieldName));
@@ -660,5 +659,17 @@ public class PostmanCollectionGenerator {
             pkType = TypeMapper.toJava(pkAttr.getType());
         }
         return !isNumericType(pkType);
+    }
+
+    private String findClassNameById(UmlSchema schema, String id) {
+        if (schema == null || schema.getClasses() == null || id == null) {
+            return null;
+        }
+        for (UmlClass c : schema.getClasses()) {
+            if (c != null && id.equals(c.getId())) {
+                return c.getName();
+            }
+        }
+        return null;
     }
 }
