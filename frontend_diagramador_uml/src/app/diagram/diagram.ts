@@ -127,6 +127,8 @@ export class Diagram implements AfterViewInit, OnDestroy {
     this.chatbot.generateDiagram(prompt).subscribe({
       next: (json) => {
         this.diagramService.loadFromJson(json, true);
+        this.diagramService.persist(true);
+        this.diagramService.broadcastFullState(json);
         this.chatbot.isLoading.set(false);
       },
       error: (err) => {
@@ -220,33 +222,34 @@ export class Diagram implements AfterViewInit, OnDestroy {
       }
 
       if (type === 'class') {
+        const nextName = this.diagramService.getNextAvailableClassName('Entidad');
         try {
           const umlClassModel: UmlClass = {
-            name: 'Entidad',
+            name: nextName,
             position: pos,
             size: { width: 180, height: 110 },
             attributes: [
-              { name: 'id', type: 'int' },
-              { name: 'nombre', type: 'string' }
+              { name: '+ id', type: 'int' },
+              { name: '+ nombre', type: 'string' }
             ],
             methods: [
-              { name: 'crear' },
-              { name: 'eliminar' }
+              { name: '+ crear' },
+              { name: '+ eliminar' }
             ]
           };
           this.diagramService.createUmlClass(umlClassModel);
         } catch (error) {
           console.error('Error al crear el elemento:', error);
           const fallbackClass: UmlClass = {
-            name: 'Entidad',
+            name: nextName,
             position: pos,
             attributes: [
-              { name: 'id', type: 'int' },
-              { name: 'nombre', type: 'string' }
+              { name: '+ id', type: 'int' },
+              { name: '+ nombre', type: 'string' }
             ],
             methods: [
-              { name: 'crear' },
-              { name: 'eliminar' }
+              { name: '+ crear' },
+              { name: '+ eliminar' }
             ]
           };
           this.fallbackService.createFallbackElement(

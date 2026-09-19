@@ -2,6 +2,7 @@ package generator_uml.back_generator_uml.service;
 
 import com.github.mustachejava.Mustache;
 import com.github.mustachejava.MustacheFactory;
+import generator_uml.back_generator_uml.entity.UmlAttribute;
 import generator_uml.back_generator_uml.entity.UmlClass;
 import generator_uml.back_generator_uml.entity.UmlSchema;
 import lombok.RequiredArgsConstructor;
@@ -201,8 +202,9 @@ public class ProjectGenerator {
             String pkName = null;
             String pkType = null;
 
-            // Si tiene padre (herencia), NO debe asignar PK propia
-            // La PK viene del padre
+            // Si tiene padre (herencia), NO debe asignar PK propia (viene del padre)
+            UmlAttribute pkAttr = !isChild ? findPrimaryKeyAttribute(c) : null;
+
             for (var attr : c.getAttributes()) {
                 Map<String, Object> a = new HashMap<>();
                 String type = TypeMapper.toJava(attr.getType());
@@ -215,8 +217,8 @@ public class ProjectGenerator {
                         || type.equalsIgnoreCase("short")
                         || type.equalsIgnoreCase("byte");
 
-                // SOLO asignar PK si NO tiene padre Y es el primer atributo Y no se ha asignado aún
-                if (!isChild && !pkAssigned) {
+                // SOLO asignar PK si NO tiene padre Y coincide con el atributo PK detectado
+                if (!isChild && attr == pkAttr && !pkAssigned) {
                     if (isNumeric) {
                         a.put("isId", true);
                         a.put("type", "Long");
@@ -234,11 +236,15 @@ public class ProjectGenerator {
                         pkName = name;
                         pkType = "String";
                     } else {
-                        a.put("isId", false);
+                        a.put("isId", true);
                         a.put("type", type);
+                        a.put("generated", false);
+                        pkAssigned = true;
+                        pkName = name;
+                        pkType = type;
                     }
                 } else {
-                    // Si tiene padre, TODOS los atributos son normales (no PK)
+                    // Si tiene padre o no es el atributo PK, todos los atributos son normales
                     a.put("isId", false);
                     a.put("type", type);
                 }
@@ -486,11 +492,11 @@ public class ProjectGenerator {
                         .findFirst()
                         .orElse(null);
 
-                if (parent != null && parent.getAttributes() != null && !parent.getAttributes().isEmpty()
-                        && parent.getAttributes().get(0) != null && parent.getAttributes().get(0).getName() != null) {
-                    String rawParentPkName = parent.getAttributes().get(0).getName().trim();
+                UmlAttribute parentPkAttr = findPrimaryKeyAttribute(parent);
+                if (parentPkAttr != null && parentPkAttr.getName() != null) {
+                    String rawParentPkName = parentPkAttr.getName().trim();
                     String parentPkName = !rawParentPkName.isEmpty() ? NamingUtil.toField(rawParentPkName) : "id";
-                    String rawParentPkType = parent.getAttributes().get(0).getType();
+                    String rawParentPkType = parentPkAttr.getType();
                     String parentPkType = (rawParentPkType != null && !rawParentPkType.trim().isEmpty())
                             ? TypeMapper.toJava(rawParentPkType)
                             : "Long";
@@ -588,6 +594,35 @@ public class ProjectGenerator {
         Path zip = root.getParent().resolve(artifactId + ".zip");
         ZipUtil.pack(root.toFile(), zip.toFile());
         return zip;
+    }
+
+    public static UmlAttribute findPrimaryKeyAttribute(UmlClass c) {
+        if (c == null || c.getAttributes() == null || c.getAttributes().isEmpty()) {
+            return null;
+        }
+        String classNameLower = (c.getName() != null) ? c.getName().toLowerCase().trim() : "";
+        // 1. Prioridad: atributo con nombre 'id', 'id_...', '..._id', 'id' + nombreClase
+        for (var attr : c.getAttributes()) {
+            if (attr == null || attr.getName() == null) continue;
+            String name = attr.getName().toLowerCase().trim();
+            if (name.equals("id") || name.equals("id_" + classNameLower) || name.equals("id" + classNameLower) || name.startsWith("id_") || name.endsWith("_id")) {
+                return attr;
+            }
+        }
+        // 2. Prioridad: primer atributo numérico entero/long o String
+        for (var attr : c.getAttributes()) {
+            if (attr == null || attr.getType() == null) continue;
+            String javaType = TypeMapper.toJava(attr.getType());
+            if (javaType.equalsIgnoreCase("int") || javaType.equalsIgnoreCase("Integer")
+                    || javaType.equalsIgnoreCase("long") || javaType.equalsIgnoreCase("Long")
+                    || javaType.equalsIgnoreCase("short") || javaType.equalsIgnoreCase("byte")
+                    || javaType.equalsIgnoreCase("String") || javaType.equalsIgnoreCase("char")
+                    || javaType.equalsIgnoreCase("Character")) {
+                return attr;
+            }
+        }
+        // 3. Fallback: primer atributo
+        return c.getAttributes().get(0);
     }
 
     private boolean isNumericType(String javaType) {

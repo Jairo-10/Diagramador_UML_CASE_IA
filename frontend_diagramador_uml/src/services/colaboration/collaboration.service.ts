@@ -19,7 +19,7 @@ type Op = BaseOp & (
   | { t: 'update_vertices'; id: string; vertices: any[]; sourceId?: string; targetId?: string }
   | { t: 'delete'; id: string; isLink?: boolean; sourceId?: string; targetId?: string }
   | { t: 'request_full_state' }
-  | { t: 'full_state'; payload: any }
+  | { t: 'full_state'; payload: any; force?: boolean }
 );
 
 @Injectable({ providedIn: 'root' })
@@ -268,18 +268,18 @@ export class CollaborationService {
           const snapshot = this.api!.exportToJson();
           // Solo responder si tenemos clases para no sobreescribir con lienzo vacío
           if (snapshot && Array.isArray(snapshot.classes) && snapshot.classes.length > 0) {
-            this.broadcast({ t: 'full_state', payload: snapshot });
+            this.broadcast({ t: 'full_state', payload: snapshot, force: false });
           }
           break;
         }
 
         case 'full_state': {
-          // Descartar snapshots duplicados si múltiples compañeros respondieron casi en el mismo segundo
+          // Si es forzado (ej. importación XML/XMI o regeneración IA), aplicar SIEMPRE inmediatamente
           const now = Date.now();
-          if (now - this.lastFullStateAppliedTime < 2500) {
+          if (!op.force && (now - this.lastFullStateAppliedTime < 2500)) {
             break;
           }
-          if (this.api && op.payload && Array.isArray(op.payload.classes) && op.payload.classes.length > 0) {
+          if (this.api && op.payload && Array.isArray(op.payload.classes)) {
             this.lastFullStateAppliedTime = now;
             this.api.loadFromJson(op.payload, true);
           }

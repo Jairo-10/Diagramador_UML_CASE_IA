@@ -21,7 +21,7 @@ El proyecto está diseñado bajo los estándares de evaluación de **Ingeniería
 
 ## 3. Estructura del Monorepositorio
 ```text
-Diagramador_UML_Examen1 2-2026/
+Diagramador_UML_Examen1/
 ├── frontend_diagramador_uml/    # Cliente Angular 20 (Canvas UML, Signals, 2 Paneles)
 ├── backend_generador_spring/    # Microservicio Spring Boot 3 / Java 21 (Generador de Código)
 ├── backend_ia_colaboracion/     # Microservicio Django Channels (WebSockets, IA, PostgreSQL)
@@ -53,7 +53,7 @@ Diagramador_UML_Examen1 2-2026/
 - **Directorio:** `backend_ia_colaboracion`
 - **Comandos de activación y arranque:**
   ```powershell
-  cd "D:\Materias UAGRM\ING. DE SOFWARE 1\Modelo examen\Diagramador_UML_Examen1 2-2026\backend_ia_colaboracion"
+  cd "D:\Materias UAGRM\ING. DE SOFWARE 1\Modelo examen\Diagramador_UML_Examen1\backend_ia_colaboracion"
   .\venv\Scripts\activate
   python manage.py migrate
   daphne -b 127.0.0.1 -p 8000 diagramador_uml.asgi:application
@@ -67,7 +67,7 @@ Diagramador_UML_Examen1 2-2026/
 - **Java requerido:** Java 21 LTS (`JAVA_HOME` apuntando a JDK 21)
 - **Comandos de compilación y arranque:**
   ```powershell
-  cd "D:\Materias UAGRM\ING. DE SOFWARE 1\Modelo examen\Diagramador_UML_Examen1 2-2026\backend_generador_spring"
+  cd "D:\Materias UAGRM\ING. DE SOFWARE 1\Modelo examen\Diagramador_UML_Examen1\backend_generador_spring"
   .\mvnw.cmd clean compile
   .\mvnw.cmd spring-boot:run
   ```
@@ -76,7 +76,7 @@ Diagramador_UML_Examen1 2-2026/
 - **Directorio:** `frontend_diagramador_uml`
 - **Comandos de arranque:**
   ```powershell
-  cd "D:\Materias UAGRM\ING. DE SOFWARE 1\Modelo examen\Diagramador_UML_Examen1 2-2026\frontend_diagramador_uml"
+  cd "D:\Materias UAGRM\ING. DE SOFWARE 1\Modelo examen\Diagramador_UML_Examen1\frontend_diagramador_uml"
   npm start
   ```
 - **Acceso:** `http://localhost:4200/`

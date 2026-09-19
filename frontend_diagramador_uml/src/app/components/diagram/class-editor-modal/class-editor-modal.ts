@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Output, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { isValidPrimaryKeyType } from '../../../../services/exports/xmi-type-mapper';
 
 export interface UmlAttributeItem {
   id: string;
@@ -92,6 +93,27 @@ export class ClassEditorModal {
   // Vista Previa de la generación
   previewAttributesText = computed(() => {
     return this.attributes().map(a => a.visibility + ' ' + a.name + ': ' + a.type).join('\n');
+  });
+
+  // Detección unificada de la Clave Primaria (PK) para la UI
+  primaryKeyAttrId = computed<string | null>(() => {
+    const list = this.attributes();
+    if (list.length === 0) return null;
+    const cName = this.className().toLowerCase().trim();
+
+    // 1. Prioridad: atributo con nombre 'id', 'id_...', '..._id', 'id' + nombreClase
+    const idAttr = list.find(a => {
+      const n = (a.name || '').toLowerCase().trim();
+      return n === 'id' || n === 'id_' + cName || n === 'id' + cName || n.startsWith('id_') || n.endsWith('_id');
+    });
+    if (idAttr) return idAttr.id;
+
+    // 2. Prioridad: primer atributo con tipo de dato válido para PK (int, long, string)
+    const validAttr = list.find(a => isValidPrimaryKeyType(a.type));
+    if (validAttr) return validAttr.id;
+
+    // 3. Fallback: primer atributo de la lista
+    return list[0].id;
   });
 
   previewMethodsText = computed(() => {

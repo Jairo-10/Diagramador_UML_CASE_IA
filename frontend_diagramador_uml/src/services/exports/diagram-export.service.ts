@@ -76,9 +76,7 @@ export class DiagramExportService {
       .map(l => l.trim())
       .filter(l => l.length > 0)
       .map(line => {
-        // Remover visibilidades formales UML (+, -, #, ~) al inicio del nombre
-        const cleanLine = line.replace(/^[\+\-\#\~]\s*/, '').trim();
-        const parts = cleanLine.split(':');
+        const parts = line.split(':');
         const name = (parts[0] || '').trim();
         const type = (parts[1] || 'string').trim();
         return { name, type };
@@ -92,11 +90,12 @@ export class DiagramExportService {
       .map(l => l.trim())
       .filter(l => l.length > 0)
       .map(line => {
-        const cleanLine = line.replace(/^[\+\-\#\~]\s*/, '').replace(/;$/, '').trim();
-        const match = cleanLine.match(/^(\w+)\(([^)]*)\)(?::\s*(\w+))?/);
+        const cleanLine = line.replace(/;$/, '').trim();
+        // Regex modified to capture the visibility prefix as part of the name
+        const match = cleanLine.match(/^([+\-#~]?\s*\w+)\(([^)]*)\)(?::\s*(\w+))?/);
         if (match) {
           return {
-            name: match[1],
+            name: match[1].trim(),
             parameters: match[2] || '',
             returnType: match[3] || 'void'
           };

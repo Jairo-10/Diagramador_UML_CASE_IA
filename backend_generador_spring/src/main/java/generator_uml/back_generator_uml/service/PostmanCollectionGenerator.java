@@ -112,15 +112,17 @@ public class PostmanCollectionGenerator {
                         .filter(pc -> pc.getName().equals(parentClassName))
                         .findFirst().orElse(null);
                 
-                if (parent != null && !parent.getAttributes().isEmpty()) {
-                    // El primer atributo del padre es la PK
-                    pkName = NamingUtil.toField(parent.getAttributes().get(0).getName());
-                    pkType = TypeMapper.toJava(parent.getAttributes().get(0).getType());
+                UmlAttribute parentPkAttr = ProjectGenerator.findPrimaryKeyAttribute(parent);
+                if (parentPkAttr != null) {
+                    pkName = NamingUtil.toField(parentPkAttr.getName());
+                    pkType = TypeMapper.toJava(parentPkAttr.getType());
                 }
             } else if (!c.getAttributes().isEmpty()) {
-                // Si NO tiene padre, el primer atributo es la PK
-                pkName = NamingUtil.toField(c.getAttributes().get(0).getName());
-                pkType = TypeMapper.toJava(c.getAttributes().get(0).getType());
+                UmlAttribute pkAttr = ProjectGenerator.findPrimaryKeyAttribute(c);
+                if (pkAttr != null) {
+                    pkName = NamingUtil.toField(pkAttr.getName());
+                    pkType = TypeMapper.toJava(pkAttr.getType());
+                }
             }
 
             // GET All
@@ -455,8 +457,9 @@ public class PostmanCollectionGenerator {
                                 .filter(tc -> tc.getName().equals(targetName))
                                 .findFirst().orElse(null);
 
-                        if (targetClass != null && !targetClass.getAttributes().isEmpty()) {
-                            String targetPkType = TypeMapper.toJava(targetClass.getAttributes().get(0).getType());
+                        UmlAttribute targetPk = ProjectGenerator.findPrimaryKeyAttribute(targetClass);
+                        if (targetPk != null && targetPk.getType() != null) {
+                            String targetPkType = TypeMapper.toJava(targetPk.getType());
                             body.set(fieldName, generateSampleValue(targetPkType, fieldName));
                         }
                     }
@@ -469,8 +472,9 @@ public class PostmanCollectionGenerator {
                                 .filter(tc -> tc.getName().equals(targetName))
                                 .findFirst().orElse(null);
 
-                        if (targetClass != null && !targetClass.getAttributes().isEmpty()) {
-                            String targetPkType = TypeMapper.toJava(targetClass.getAttributes().get(0).getType());
+                        UmlAttribute targetPk = ProjectGenerator.findPrimaryKeyAttribute(targetClass);
+                        if (targetPk != null && targetPk.getType() != null) {
+                            String targetPkType = TypeMapper.toJava(targetPk.getType());
                             body.set(fieldName, generateSampleValue(targetPkType, fieldName));
                         }
                     }
@@ -496,8 +500,9 @@ public class PostmanCollectionGenerator {
                                 .filter(sc -> sc.getName().equals(sourceName))
                                 .findFirst().orElse(null);
 
-                        if (sourceClass != null && !sourceClass.getAttributes().isEmpty()) {
-                            String sourcePkType = TypeMapper.toJava(sourceClass.getAttributes().get(0).getType());
+                        UmlAttribute sourcePk = ProjectGenerator.findPrimaryKeyAttribute(sourceClass);
+                        if (sourcePk != null && sourcePk.getType() != null) {
+                            String sourcePkType = TypeMapper.toJava(sourcePk.getType());
                             body.set(fieldName, generateSampleValue(sourcePkType, fieldName));
                         }
                     }
@@ -589,12 +594,14 @@ public class PostmanCollectionGenerator {
             String firstPkType = "Long";
             String secondPkType = "Long";
             
-            if (firstClass != null && !firstClass.getAttributes().isEmpty()) {
-                firstPkType = TypeMapper.toJava(firstClass.getAttributes().get(0).getType());
+            UmlAttribute firstPk = ProjectGenerator.findPrimaryKeyAttribute(firstClass);
+            if (firstPk != null && firstPk.getType() != null) {
+                firstPkType = TypeMapper.toJava(firstPk.getType());
             }
             
-            if (secondClass != null && !secondClass.getAttributes().isEmpty()) {
-                secondPkType = TypeMapper.toJava(secondClass.getAttributes().get(0).getType());
+            UmlAttribute secondPk = ProjectGenerator.findPrimaryKeyAttribute(secondClass);
+            if (secondPk != null && secondPk.getType() != null) {
+                secondPkType = TypeMapper.toJava(secondPk.getType());
             }
             
             body.set(firstFieldName, generateSampleValue(firstPkType, firstFieldName));
@@ -647,17 +654,11 @@ public class PostmanCollectionGenerator {
     }
 
     private boolean shouldIncludeIdInPost(UmlClass c) {
-        // El primer atributo de la clase (o del padre si tiene herencia) es la PK
-        // Si es numérica → autogenerada → NO incluir en POST
-        // Si es String → manual → SÍ incluir en POST
-        
         String pkType = "String";
-        
-        // Buscar el primer atributo (si no tiene atributos, asumir autogenerada)
-        if (!c.getAttributes().isEmpty()) {
-            pkType = TypeMapper.toJava(c.getAttributes().get(0).getType());
+        UmlAttribute pkAttr = ProjectGenerator.findPrimaryKeyAttribute(c);
+        if (pkAttr != null && pkAttr.getType() != null) {
+            pkType = TypeMapper.toJava(pkAttr.getType());
         }
-        
         return !isNumericType(pkType);
     }
 }

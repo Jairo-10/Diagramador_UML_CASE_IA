@@ -15,6 +15,14 @@ export class SqlExportService {
     'TIMESTAMP'
   ]);
 
+  /**
+   * Limpia símbolos de visibilidad UML (+, -, #, ~) y espacios del nombre del atributo.
+   */
+  private cleanName(name: string): string {
+    if (!name) return '';
+    return name.replace(/^[\+\-\#\~]\s*/, '').trim();
+  }
+
   mapToSqlType(rawType: string): string {
     if (!rawType) return 'VARCHAR(255)';
     const t = rawType.trim().toLowerCase();
@@ -78,10 +86,11 @@ export class SqlExportService {
       // Verificar si la clase es hija en una relacion de herencia
       const generalizationRel = umlJson.relationships?.find((rel: any) => rel.type === 'generalization' && rel.sourceId === cls.id);
       sql += `CREATE TABLE ${cls.name} (\n`;
+
       const columns: string[] = [];
 
       if (generalizationRel) {
-        // Es clase hija: la PK es la referencia al padre, con mismo nombre y tipo exacto
+        // Clase Hija: Hereda la PK del padre (BIGINT / INT / VARCHAR) pero SIN SERIAL/BIGSERIAL para que comparta el mismo ID
         const parent = umlJson.classes.find((c: any) => c.id === generalizationRel.targetId);
         const parentPkName = this.getPrimaryKey(parent, umlJson);
         const parentPkType = this.getPrimaryKeyType(parent, umlJson);
@@ -89,34 +98,39 @@ export class SqlExportService {
 
         if (cls.attributes && cls.attributes.length > 0) {
           cls.attributes.forEach((attr: any) => {
-            if (attr.name !== parentPkName) {
+            const cleanColName = this.cleanName(attr.name);
+            if (cleanColName !== parentPkName) {
               const sqlType = this.mapToSqlType(attr.type);
-              columns.push(`  ${attr.name} ${sqlType}`);
+              columns.push(`  ${cleanColName} ${sqlType}`);
             }
           });
         }
       } else if (!cls.attributes || cls.attributes.length === 0) {
         columns.push(`  id BIGSERIAL PRIMARY KEY`);
       } else {
-        cls.attributes.forEach((attr: any, index: number) => {
+        const pkName = this.getPrimaryKey(cls, umlJson);
+        const pkAttr = this.findPrimaryKeyAttribute(cls);
+        const pkType = pkAttr ? this.mapToSqlType(pkAttr.type) : 'BIGINT';
+        const isSyntheticPk = !pkAttr || this.invalidPkTypes.has(pkType);
+
+        if (isSyntheticPk) {
+          columns.push(`  id BIGSERIAL PRIMARY KEY`);
+        }
+
+        cls.attributes.forEach((attr: any) => {
+          const cleanColName = this.cleanName(attr.name);
           const sqlType = this.mapToSqlType(attr.type);
-          let colDef = `  ${attr.name} ${sqlType}`;
-          if (index === 0) {
-            if (this.invalidPkTypes.has(sqlType)) {
-              columns.push(`  id BIGSERIAL PRIMARY KEY`);
-              columns.push(colDef);
+
+          if (!isSyntheticPk && cleanColName === pkName) {
+            if (sqlType === 'BIGINT') {
+              columns.push(`  ${cleanColName} BIGSERIAL PRIMARY KEY`);
+            } else if (sqlType === 'INT') {
+              columns.push(`  ${cleanColName} SERIAL PRIMARY KEY`);
             } else {
-              if (sqlType === 'BIGINT') {
-                colDef = `  ${attr.name} BIGSERIAL PRIMARY KEY`;
-              } else if (sqlType === 'INT') {
-                colDef = `  ${attr.name} SERIAL PRIMARY KEY`;
-              } else {
-                colDef += ' PRIMARY KEY';
-              }
-              columns.push(colDef);
+              columns.push(`  ${cleanColName} ${sqlType} PRIMARY KEY`);
             }
           } else {
-            columns.push(colDef);
+            columns.push(`  ${cleanColName} ${sqlType}`);
           }
         });
       }
@@ -224,6 +238,28 @@ export class SqlExportService {
     return sql.trim();
   }
 
+  private findPrimaryKeyAttribute(cls: any): any | null {
+    if (!cls || !cls.attributes || cls.attributes.length === 0) return null;
+    const cName = (cls.name || '').toLowerCase().trim();
+
+    // 1. Prioridad: Atributo con nombre 'id', 'id_' + nombre, 'id' + nombre o que termine en '_id'
+    const idAttr = cls.attributes.find((a: any) => {
+      const n = (a.name || '').toLowerCase().trim();
+      return n === 'id' || n === 'id_' + cName || n === 'id' + cName || n.startsWith('id_') || n.endsWith('_id');
+    });
+    if (idAttr) return idAttr;
+
+    // 2. Prioridad: Primer atributo con tipo válido para PK (no en invalidPkTypes)
+    const validAttr = cls.attributes.find((a: any) => {
+      const sqlType = this.mapToSqlType(a.type);
+      return !this.invalidPkTypes.has(sqlType);
+    });
+    if (validAttr) return validAttr;
+
+    // 3. Fallback: primer atributo
+    return cls.attributes[0];
+  }
+
   private getPrimaryKey(cls: any, umlJson?: any): string {
     if (umlJson) {
       const genRel = umlJson.relationships?.find((rel: any) => rel.type === 'generalization' && rel.sourceId === cls?.id);
@@ -232,12 +268,12 @@ export class SqlExportService {
         if (parent) return this.getPrimaryKey(parent, umlJson);
       }
     }
-    if (!cls || !cls.attributes || cls.attributes.length === 0) return 'id';
+    const pkAttr = this.findPrimaryKeyAttribute(cls);
+    if (!pkAttr) return 'id';
 
-    const firstAttr = cls.attributes[0];
-    const sqlType = this.mapToSqlType(firstAttr.type);
-
-    return this.invalidPkTypes.has(sqlType) ? 'id' : firstAttr.name;
+    const cleanAttrName = this.cleanName(pkAttr.name);
+    const sqlType = this.mapToSqlType(pkAttr.type);
+    return this.invalidPkTypes.has(sqlType) ? 'id' : cleanAttrName;
   }
 
   private getPrimaryKeyType(cls: any, umlJson?: any): string {
@@ -248,11 +284,10 @@ export class SqlExportService {
         if (parent) return this.getPrimaryKeyType(parent, umlJson);
       }
     }
-    if (!cls || !cls.attributes || cls.attributes.length === 0) return 'BIGINT';
+    const pkAttr = this.findPrimaryKeyAttribute(cls);
+    if (!pkAttr) return 'BIGINT';
 
-    const firstAttr = cls.attributes[0];
-    const sqlType = this.mapToSqlType(firstAttr.type);
-
+    const sqlType = this.mapToSqlType(pkAttr.type);
     return this.invalidPkTypes.has(sqlType) ? 'BIGINT' : sqlType;
   }
 

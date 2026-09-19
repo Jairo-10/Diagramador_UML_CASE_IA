@@ -255,10 +255,6 @@ export class EditionService {
         model.label(labelIndex, { ...model.label(labelIndex), attrs: { text: { text } } });
         collab?.broadcast({ t: 'edit_label', linkId: model.id, index: labelIndex, text });
         model.set('label', text);
-        if (graph) {
-          const umlJson = this.exportService.export(graph);
-          this.umlValidationService.validateModel(umlJson);
-        }
       }
       cleanup();
     };

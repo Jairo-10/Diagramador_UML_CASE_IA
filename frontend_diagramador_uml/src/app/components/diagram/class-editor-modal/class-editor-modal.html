@@ -154,7 +154,7 @@
         <div class="space-y-2">
           <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between px-1">
             <span>Atributos Actuales ({{ attributes().length }})</span>
-            <span class="text-[10px] text-slate-500 font-normal">El primer atributo 'id' se usará como clave primaria</span>
+            <span class="text-[10px] text-slate-500 font-normal">El atributo 'id' o primer campo compatible se usará como clave primaria</span>
           </div>
 
           <div *ngIf="attributes().length === 0" class="p-6 text-center rounded-xl border border-dashed border-slate-800 text-slate-500 text-xs">
@@ -190,8 +190,9 @@
               </span>
 
               <!-- Indicador de PK -->
-              <span *ngIf="a.name.toLowerCase() === 'id' || (i === 0 && (a.type === 'int' || a.type === 'long'))" 
-                class="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-bold">PK</span>
+              <span *ngIf="a.id === primaryKeyAttrId()" 
+                class="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[10px] font-bold"
+                title="Clave Primaria (PK)">PK</span>
             </div>
 
             <!-- Acciones -->

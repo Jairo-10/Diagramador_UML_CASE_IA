@@ -288,9 +288,7 @@ export class DiagramService {
 					sourceId: src,
 					targetId: trg
 				});
-				const umlJson = this.exportService.export(this.graph);
-				this.umlValidationService.validateModel(umlJson);
-				this.persist(true);
+				this.persist(false);
 			});
 
 			//  Redimensionamiento
@@ -389,8 +387,7 @@ export class DiagramService {
 					});
 				} else {
 					this.collab.broadcast({ t: 'move_link', id: link.id, sourceId: src, targetId: trg });
-					const umlJson = this.exportService.export(this.graph);
-					this.umlValidationService.validateModel(umlJson);
+					this.persist();
 				}
 			});
 
@@ -581,7 +578,7 @@ export class DiagramService {
 				createTypedRelationship: (sourceId: string, targetId: string, type: string, remote = false, linkId?: string) =>
 				this.createTypedRelationship(sourceId, targetId, type, remote, linkId),
 
-				loadFromJson: (json) => this.loadFromJson(json),
+				loadFromJson: (json, isSync = false) => this.loadFromJson(json, isSync),
 				exportToJson: () => this.exportService.export(this.graph),
 				persist: (immediate = false) => this.persist(immediate),
 			});
@@ -847,6 +844,32 @@ export class DiagramService {
 		// this.http.post('/api/diagrams', json).subscribe(...)
 	}
 
+	// Genera nombres incrementales automáticos si ya existen (ej. Entidad, Entidad1, Entidad2)
+	getNextAvailableClassName(baseName: string = 'Entidad'): string {
+		if (!this.graph) return baseName;
+		const existingNames = new Set<string>();
+		this.graph.getElements().forEach((el: any) => {
+			const name = el.get('name') || el.attr('.uml-class-name-text/text');
+			if (name && typeof name === 'string') {
+				existingNames.add(name.trim().toLowerCase());
+			}
+		});
+
+		// 1. Si el nombre base no existe en el canvas, usarlo directamente
+		const cleanBase = baseName.trim();
+		const baseLower = cleanBase.toLowerCase();
+		if (!existingNames.has(baseLower)) {
+			return cleanBase;
+		}
+
+		// 2. Si ya existe, buscar secuencialmente Entidad1, Entidad2, Entidad3...
+		let index = 1;
+		while (existingNames.has(`${baseLower}${index}`) || existingNames.has(`${baseLower} ${index}`)) {
+			index++;
+		}
+		return `${cleanBase}${index}`;
+	}
+
 	/**************************************************************************************************
 	 * CONFIFURACIÓN Y CREACIÓN DE UML
 	 ***************************************************************************************************/
@@ -869,11 +892,16 @@ export class DiagramService {
 						return `${m.name}${params}${ret};`;
 					}).join('\n')
 				: (classModel.methods || '');
+
+			const resolvedName = remote
+				? (classModel.name || 'Entidad')
+				: (classModel.name ? classModel.name : this.getNextAvailableClassName('Entidad'));
+
 			//  Usar la clase custom con tamaño base compacto
 			const umlClass = new this.joint.shapes.custom.UMLClass({
 				position: classModel.position || { x: 100, y: 100 },
 				size: classModel.size || { width: 160, height: 90 },
-				name: classModel.name || 'Entidad',
+				name: resolvedName,
 				attributes: attributesText,
 				methods: methodsText,
 			});
@@ -903,7 +931,7 @@ export class DiagramService {
 					t: 'add_class',
 					id: umlClass.id,
 					payload: {
-						name: classModel.name,
+						name: resolvedName,
 						position: classModel.position,
 						size: classModel.size,
 						attributes: classModel.attributes,
@@ -1284,6 +1312,14 @@ export class DiagramService {
 	exportToJson() {
 		if (!this.graph) return null;
 		return this.exportService.export(this.graph);
+	}
+
+	// Difunde forzadamente el estado completo del diagrama a todos los pares de la sala
+	broadcastFullState(json?: any) {
+		const payload = json || this.exportToJson();
+		if (payload && Array.isArray(payload.classes)) {
+			this.collab.broadcast({ t: 'full_state', payload, force: true });
+		}
 	}
 	// Guarda el estado actual del diagrama en localStorage y sincroniza en vivo con PostgreSQL
 	public persist(immediate: boolean = false) {

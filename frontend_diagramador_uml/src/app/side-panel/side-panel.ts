@@ -11,6 +11,8 @@ import { FrontendGeneratorService } from '../../services/exports/frontend-genera
 import { Spinner } from "../components/diagram/spinner/spinner";
 import { ChatbotService } from '../../services/IA/chatbot.service';
 import { BackendGeneratorService } from '../../services/exports/backend-generator.service';
+import { XmiExportService } from '../../services/exports/xmi-export.service';
+import { XmiImportService } from '../../services/imports/xmi-import.service';
 
 @Component({
   selector: 'app-side-panel',
@@ -22,6 +24,8 @@ export class SidePanel {
   private frontendGeneratorService = inject(FrontendGeneratorService);
   private chatboxService = inject(ChatbotService);
   private backendGeneratorService = inject(BackendGeneratorService);
+  private xmiExportService = inject(XmiExportService);
+  private xmiImportService = inject(XmiImportService);
 
   @Output() elementDragged = new EventEmitter<CdkDragEnd>();
   @Output() saveClicked = new EventEmitter<void>();
@@ -38,6 +42,7 @@ export class SidePanel {
   validationCollapsed = signal<boolean>(false);
   validationResult = signal<any>(null);
   analyzingModel = signal<boolean>(false);
+  isProcessingXmi = signal<boolean>(false);
   roomId: string | null = null;
   copied = signal<boolean>(false);
   recognizing = signal<boolean>(false);
@@ -106,7 +111,11 @@ export class SidePanel {
   analyzeNow(): void {
     this.analyzingModel.set(true);
     const umlJson = this.diagramService.exportToJson();
-    this.umlValidation.validateModel(umlJson);
+    if (umlJson) {
+      this.umlValidation.validateModel(umlJson);
+    } else {
+      this.analyzingModel.set(false);
+    }
   }
 
   updateValidationResult(result: any): void {
@@ -202,7 +211,53 @@ export class SidePanel {
 
   exportSql(): void {
     const umlJson = this.diagramService.exportToJson();
-    this.sqlExportService.downloadSql(umlJson, 'diagrama.sql');
+    if (umlJson) {
+      this.sqlExportService.downloadSql(umlJson, 'diagrama.sql');
+    }
+  }
+
+  /**
+   * Exporta el modelo actual en formato estándar OMG UML 2.1 / XMI 2.1
+   * compatible con Enterprise Architect (Sparx Systems).
+   */
+  exportXmi(): void {
+    const umlJson = this.diagramService.exportToJson();
+    if (!umlJson) {
+      alert('No hay elementos en el diagrama para exportar.');
+      return;
+    }
+    this.xmiExportService.downloadXmi(umlJson, 'diagrama_ea.xmi');
+  }
+
+  /**
+   * Importa un archivo .xmi o .xml generado por Enterprise Architect,
+   * reconstruye el grafo en el lienzo, guarda en PostgreSQL y sincroniza.
+   */
+  onImportXmi(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    this.isProcessingXmi.set(true);
+
+    this.xmiImportService.importFromFile(file)
+      .then((dto) => {
+        // Carga autoritativa en JointJS
+        this.diagramService.loadFromJson(dto, true);
+        // Persistencia inmediata en PostgreSQL
+        this.diagramService.persist(true);
+        // Sincronización colaborativa inmediata con todos los usuarios de la sala
+        this.diagramService.broadcastFullState(dto);
+        console.log('[XMI] Diagrama importado y sincronizado con éxito:', dto);
+        this.isProcessingXmi.set(false);
+        input.value = '';
+      })
+      .catch((err) => {
+        console.error('[XMI] Error importando XMI:', err);
+        alert(`Error al importar el archivo XMI: ${err.message || err}`);
+        this.isProcessingXmi.set(false);
+        input.value = '';
+      });
   }
 
   onImportImage(event: Event): void {
@@ -216,7 +271,9 @@ export class SidePanel {
     this.umlImageService.analyzeImage(file).subscribe({
       next: (res) => {
         const umlJson = res.uml_json || res;
-        this.diagramService.loadFromJson(umlJson);
+        this.diagramService.loadFromJson(umlJson, true);
+        this.diagramService.persist(true);
+        this.diagramService.broadcastFullState(umlJson);
         this.analyzingModel.set(false);
         this.umlImageService.loading.set(false);
       },
@@ -230,7 +287,9 @@ export class SidePanel {
 
   onGenerateFrontend(): void {
     const umlJson = this.diagramService.exportToJson();
-    this.frontendGeneratorService.generateFrontend(umlJson);
+    if (umlJson) {
+      this.frontendGeneratorService.generateFrontend(umlJson);
+    }
   }
 
   isLoadingImage(): boolean {

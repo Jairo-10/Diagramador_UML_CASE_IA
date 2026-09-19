@@ -1,4 +1,5 @@
 import json
+import asyncio
 from channels.generic.websocket import AsyncWebsocketConsumer
 from uml_api.services.services_gemini import call_gemini_analysis
 import re
@@ -132,9 +133,9 @@ JSON UML:
 {json.dumps(uml_json, indent=2)}
 """
 
-            # Llamada segura a Gemini con fallback amigable si no hay API Key o hay error 403
+            # Llamada segura y no bloqueante a Gemini en hilo secundario para no congelar el loop de WebSockets
             try:
-                raw_output = call_gemini_analysis(prompt)
+                raw_output = await asyncio.to_thread(call_gemini_analysis, prompt)
                 if isinstance(raw_output, str):
                     raw_output = re.sub(r"^```json\s*|\s*```$", "", raw_output.strip(), flags=re.MULTILINE)
                 analysis = json.loads(raw_output)
