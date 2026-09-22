@@ -124,15 +124,19 @@ export class Diagram implements AfterViewInit, OnDestroy {
 
   generateFromPrompt(prompt: string): void {
     this.chatbot.isLoading.set(true);
-    this.chatbot.generateDiagram(prompt).subscribe({
-      next: (json) => {
-        this.diagramService.loadFromJson(json, true);
-        this.diagramService.persist(true);
-        this.diagramService.broadcastFullState(json);
+    const currentDiagram = this.diagramService.exportToJson();
+
+    this.chatbot.generateDiagram(prompt, currentDiagram).subscribe({
+      next: (res) => {
+        if (res.message) {
+          this.chatbot.lastMessage.set(res.message);
+        }
+        this.diagramService.applyAiDiagram(res);
         this.chatbot.isLoading.set(false);
       },
       error: (err) => {
         console.error('Error al generar diagrama desde chatbot', err);
+        this.chatbot.lastMessage.set('Ocurrió un error al procesar la solicitud con la IA.');
         this.chatbot.isLoading.set(false);
       }
     });

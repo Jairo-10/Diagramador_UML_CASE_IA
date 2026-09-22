@@ -22,7 +22,7 @@ import { XmiImportService } from '../../services/imports/xmi-import.service';
 })
 export class SidePanel {
   private frontendGeneratorService = inject(FrontendGeneratorService);
-  private chatboxService = inject(ChatbotService);
+  public chatboxService = inject(ChatbotService);
   private backendGeneratorService = inject(BackendGeneratorService);
   private xmiExportService = inject(XmiExportService);
   private xmiImportService = inject(XmiImportService);

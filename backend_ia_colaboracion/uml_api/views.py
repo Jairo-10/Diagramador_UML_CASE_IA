@@ -21,10 +21,11 @@ from .utils.zip_utils import compress_folder_to_zip
 class GenerateUMLView(APIView):
     def post(self, request):
         prompt = request.data.get("prompt")
+        current_diagram = request.data.get("currentDiagram")
         if not prompt:
             return Response({"error": "El campo 'prompt' es requerido"}, status=status.HTTP_400_BAD_REQUEST)
 
-        output = call_gemini(prompt)
+        output = call_gemini(prompt, current_diagram)
 
         # 🧹 Limpiar bloque de código Markdown si viene envuelto en ```json ... ```
         if isinstance(output, str):

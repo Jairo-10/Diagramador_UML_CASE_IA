@@ -1281,6 +1281,190 @@ export class DiagramService {
 		}
 	}
 
+	/**
+	 * Aplica de forma inteligente e incremental la respuesta del copiloto IA:
+	 * 1. Preserva las posiciones (x, y) de las clases existentes.
+	 * 2. Asigna posiciones automáticas en rejilla limpia para clases nuevas.
+	 * 3. Actualiza atributos y métodos de clases existentes sin destruirlas.
+	 * 4. Remueve clases o relaciones que hayan sido eliminadas por el comando.
+	 * 5. Persiste en PostgreSQL y sincroniza vía WebSockets en tiempo real.
+	 */
+	applyAiDiagram(aiJson: any): void {
+		if (!this.graph || !aiJson || aiJson.error || !Array.isArray(aiJson.classes)) {
+			console.warn('[Guard] Actualización abortada: IA devolvió error o formato inválido.', aiJson);
+			return;
+		}
+
+		const currentElements = this.graph.getElements();
+		if (currentElements.length === 0) {
+			this.loadFromJson(aiJson, true);
+			this.persist(true);
+			this.broadcastFullState(aiJson);
+			return;
+		}
+
+		const incomingClasses = Array.isArray(aiJson.classes) ? aiJson.classes : [];
+		const incomingRels = Array.isArray(aiJson.relationships) ? aiJson.relationships : [];
+
+		const existingByName = new Map<string, any>();
+		const existingById = new Map<string, any>();
+		currentElements.forEach((el: any) => {
+			const name = (el.get('name') || '').trim().toLowerCase();
+			if (name) existingByName.set(name, el);
+			existingById.set(el.id, el);
+		});
+
+		const incomingNames = new Set(incomingClasses.map((c: any) => (c.name || '').trim().toLowerCase()));
+		const incomingIds = new Set(incomingClasses.map((c: any) => c.id));
+
+		// Eliminar elementos removidos por la IA
+		currentElements.forEach((el: any) => {
+			const elName = (el.get('name') || '').trim().toLowerCase();
+			const elId = el.id;
+			if (!incomingIds.has(elId) && !incomingNames.has(elName)) {
+				this.graph.removeCells([el], { collab: true });
+			}
+		});
+
+		// Coordenadas para clases nuevas
+		let nextX = 100;
+		let nextY = 120;
+		if (currentElements.length > 0) {
+			const rightmost = Math.max(...currentElements.map((el: any) => el.position().x + (el.size()?.width || 180)));
+			const bottommost = Math.max(...currentElements.map((el: any) => el.position().y + (el.size()?.height || 120)));
+			nextX = rightmost + 80;
+			nextY = 120;
+			if (nextX > 1600) {
+				nextX = 100;
+				nextY = bottommost + 80;
+			}
+		}
+
+		const idMap: Record<string, string> = {};
+
+		incomingClasses.forEach((cls: any, index: number) => {
+			const clsNameKey = (cls.name || '').trim().toLowerCase();
+			const existing = existingById.get(cls.id) || existingByName.get(clsNameKey);
+
+			const attrText = Array.isArray(cls.attributes)
+				? cls.attributes.map((a: any) => {
+					const match = typeof a.name === 'string' ? a.name.match(/^[+\-#~]/) : null;
+					const v = (a.visibility || '').trim() || (match ? match[0] : '+');
+					const name = typeof a.name === 'string' ? a.name.trim().replace(/^[+\-#~]\s*/, '') : '';
+					const type = a.type ? `: ${a.type}` : ': string';
+					return `${v} ${name}${type}`.trim();
+				}).join('\n')
+				: (typeof cls.attributes === 'string' ? cls.attributes : '');
+			const methText = Array.isArray(cls.methods)
+				? cls.methods.map((m: any) => {
+					const match = typeof m.name === 'string' ? m.name.match(/^[+\-#~]/) : null;
+					const v = (m.visibility || '').trim() || (match ? match[0] : '+');
+					const name = typeof m.name === 'string' ? m.name.trim().replace(/^[+\-#~]\s*/, '') : '';
+					const params = m.parameters ? '(' + m.parameters + ')' : '()';
+					const ret = m.returnType ? ': ' + m.returnType : ': void';
+					return `${v} ${name}${params}${ret};`.trim();
+				}).join('\n')
+				: (typeof cls.methods === 'string' ? cls.methods : '');
+
+			if (existing) {
+				idMap[cls.id] = existing.id;
+				if (cls.name) {
+					existing.set('name', cls.name);
+					existing.attr('.uml-class-name-text/text', cls.name);
+				}
+				existing.set('attributes', attrText);
+				existing.attr('.uml-class-attrs-text/text', attrText);
+				existing.set('methods', methText);
+				existing.attr('.uml-class-methods-text/text', methText);
+
+				this.edition.autoResizeUmlClass(existing, this.paper);
+				this.edition.scheduleAutoResize(existing, this.paper);
+			} else {
+				const posX = nextX + ((index % 3) * 220);
+				const posY = nextY + (Math.floor(index / 3) * 180);
+				const newCls = this.createUmlClass({
+					id: cls.id,
+					name: cls.name,
+					position: { x: posX, y: posY },
+					size: { width: 180, height: 100 },
+					attributes: attrText,
+					methods: methText
+				}, true);
+
+				idMap[cls.id] = newCls.id;
+				this.edition.autoResizeUmlClass(newCls, this.paper);
+				this.edition.scheduleAutoResize(newCls, this.paper);
+			}
+		});
+
+		// Sincronizar relaciones
+		const currentLinks = this.graph.getLinks();
+		const incomingRelKeys = new Set(incomingRels.map((r: any) => {
+			const sId = idMap[r.sourceId] || r.sourceId;
+			const tId = idMap[r.targetId] || r.targetId;
+			return `${sId}->${tId}:${r.type}`;
+		}));
+
+		currentLinks.forEach((link: any) => {
+			const sId = link.get('source')?.id;
+			const tId = link.get('target')?.id;
+			const rType = link.get('relationType');
+			const key = `${sId}->${tId}:${rType}`;
+			if (!incomingRelKeys.has(key)) {
+				this.graph.removeCells([link], { collab: true });
+			}
+		});
+
+		incomingRels.forEach((rel: any) => {
+			const srcId = idMap[rel.sourceId] || rel.sourceId;
+			const trgId = idMap[rel.targetId] || rel.targetId;
+			if (!srcId || !trgId) return;
+
+			const existingLink = this.graph.getLinks().find((l: any) => {
+				return (
+					l.id === rel.id ||
+					(l.get('source')?.id === srcId &&
+					l.get('target')?.id === trgId &&
+					l.get('relationType') === rel.type)
+				);
+			});
+
+			if (existingLink) {
+				if (rel.labels) {
+					existingLink.set(
+						'labels',
+						rel.labels.map((txt: string, i: number) => ({
+							position: { distance: i === 0 ? 35 : -35, offset: -14 },
+							attrs: { text: { text: txt, fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
+							markup: [{ tagName: 'text', selector: 'text' }]
+						}))
+					);
+				}
+			} else {
+				const link = this.createTypedRelationship(srcId, trgId, rel.type, true, rel.id);
+				if (rel.labels) {
+					link.set(
+						'labels',
+						rel.labels.map((txt: string, i: number) => ({
+							position: { distance: i === 0 ? 35 : -35, offset: -14 },
+							attrs: { text: { text: txt, fill: '#0f172a', fontSize: 13, fontWeight: 'bold' } },
+							markup: [{ tagName: 'text', selector: 'text' }]
+						}))
+					);
+				}
+				this.graph.addCell(link, { collab: true });
+			}
+		});
+
+		setTimeout(() => {
+			this.persist(true);
+			const fullJson = this.exportToJson();
+			if (fullJson) {
+				this.broadcastFullState(fullJson);
+			}
+		}, 100);
+	}
+
 	// ========= Abre el editor asistido para la clase seleccionada =========
 	openClassEditor(cellModel?: any): void {
 		const target = cellModel || this.selectedCell;

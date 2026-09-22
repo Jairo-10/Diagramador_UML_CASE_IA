@@ -1,4 +1,4 @@
-﻿<!-- ==========================================================================
+<!-- ==========================================================================
      PANEL IZQUIERDO: HERRAMIENTAS DE MODELADO & CREACIÓN UML (FIJO)
      ========================================================================== -->
 <div class="flex flex-col h-full bg-slate-950 text-slate-100 border-r border-slate-800/80 shadow-2xl backdrop-blur-xl select-none overflow-hidden w-80">
@@ -186,28 +186,33 @@
     <!-- SECCIÓN 3: COPILOTO IA POR VOZ/TEXTO -->
     <div class="space-y-2">
       <div class="flex items-center justify-between">
-        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">3. Generador IA</span>
-        <span class="text-[10px] text-emerald-400 font-mono">Gemini 2.5</span>
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">3. Copiloto IA (Voz & Texto)</span>
+        <span class="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          Gemini Flash
+        </span>
       </div>
 
       <div class="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2.5 shadow-sm">
         <div class="relative">
           <textarea
             [(ngModel)]="prompt"
+            [disabled]="chatboxService.isLoading()"
             (keydown.enter)="$event.preventDefault(); onGenerate()"
-            placeholder="Ej: Crea un sistema escolar con Estudiante, Docente y Materia..."
+            placeholder="Ej: Crea la clase Factura con numero:string y total:decimal... o habla por voz"
             rows="3"
-            class="w-full text-xs p-2.5 rounded-xl bg-slate-950 border border-slate-750 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-100 placeholder-slate-500 resize-none transition custom-scrollbar"></textarea>
+            class="w-full text-xs p-2.5 rounded-xl bg-slate-950 border border-slate-750 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-100 placeholder-slate-500 resize-none transition custom-scrollbar disabled:opacity-60"></textarea>
           
           <!-- Botón de Micrófono -->
           <button
             (click)="toggleVoiceInput()"
             type="button"
+            [disabled]="chatboxService.isLoading()"
             [ngClass]="{
               'bg-rose-500/20 text-rose-400 border-rose-500/50 animate-pulse': recognizing(),
               'bg-slate-800 text-slate-400 hover:text-white border-slate-700': !recognizing()
             }"
-            class="absolute bottom-2.5 right-2.5 p-1.5 rounded-lg border text-xs transition cursor-pointer"
+            class="absolute bottom-2.5 right-2.5 p-1.5 rounded-lg border text-xs transition cursor-pointer disabled:opacity-50"
             title="Dictado por voz">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15a3 3 0 003-3V6a3 3 0 00-3-3 3 3 0 00-3 3v6a3 3 0 003 3z" />
@@ -217,13 +222,32 @@
 
         <button
           (click)="onGenerate()"
-          [disabled]="!prompt.trim()"
+          [disabled]="!prompt.trim() || chatboxService.isLoading()"
           class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-bold transition shadow-md shadow-indigo-950/50 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <svg *ngIf="!chatboxService.isLoading()" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
           </svg>
-          <span>Diseñar con IA</span>
+          <span *ngIf="!chatboxService.isLoading()">Diseñar con IA</span>
+          <span *ngIf="chatboxService.isLoading()" class="flex items-center gap-2 text-indigo-200">
+            <span class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            <span>Modelando con IA...</span>
+          </span>
         </button>
+
+        <!-- Feedback / Mensaje de Respuesta de la IA -->
+        <div *ngIf="chatboxService.lastMessage()" class="p-2.5 rounded-xl bg-indigo-950/60 border border-indigo-500/40 text-[11px] text-indigo-200 flex items-start justify-between gap-2 shadow-inner">
+          <div class="flex items-start gap-2">
+            <svg class="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+            </svg>
+            <span class="leading-relaxed">{{ chatboxService.lastMessage() }}</span>
+          </div>
+          <button (click)="chatboxService.lastMessage.set(null)" class="text-indigo-400 hover:text-white transition cursor-pointer shrink-0" title="Cerrar">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
