@@ -11,6 +11,7 @@ import java.nio.file.Path;
 
 @RestController
 @RequestMapping("/generate")
+@CrossOrigin(origins = "*")
 @RequiredArgsConstructor
 public class GenerateController {
 
