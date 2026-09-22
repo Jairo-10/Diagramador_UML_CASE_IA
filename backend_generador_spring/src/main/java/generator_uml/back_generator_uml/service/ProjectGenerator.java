@@ -209,7 +209,8 @@ public class ProjectGenerator {
             for (var attr : c.getAttributes()) {
                 Map<String, Object> a = new HashMap<>();
                 String type = TypeMapper.toJava(attr.getType());
-                String name = NamingUtil.toField(attr.getName());
+                String rawName = attr.getName() == null ? "" : attr.getName().replaceAll("^[+\\-#~]\\s*", "");
+                String name = NamingUtil.toField(rawName);
 
                 boolean isNumeric = type.equalsIgnoreCase("int")
                         || type.equalsIgnoreCase("Integer")
@@ -422,7 +423,7 @@ public class ProjectGenerator {
 
                     if (parent != null) {
                         final Set<String> parentAttrs = parent.getAttributes().stream()
-                                .map(a -> NamingUtil.toField(a.getName()))
+                                .map(a -> NamingUtil.toField(a.getName() == null ? "" : a.getName().replaceAll("^[+\\-#~]\\s*", "")))
                                 .collect(Collectors.toSet());
 
                         attrs.removeIf(a -> parentAttrs.contains(String.valueOf(a.get("name"))));
@@ -440,7 +441,8 @@ public class ProjectGenerator {
             for (var m : c.getMethods()) {
                 Map<String, Object> mm = new HashMap<>();
                 String returnType = (m.getReturnType() == null || m.getReturnType().isBlank()) ? "void" : TypeMapper.toJava(m.getReturnType());
-                mm.put("name", m.getName());
+                String rawMethodName = m.getName() == null ? "" : m.getName().replaceAll("^[+\\-#~]\\s*", "");
+                mm.put("name", rawMethodName);
                 mm.put("parameters", m.getParameters() == null ? "" : m.getParameters());
                 mm.put("returnType", returnType);
 

@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import unicodedata
+import re
 
 class FlutterCRUDGenerator:
     def __init__(self, uml_json):
@@ -371,6 +372,9 @@ class HomePage extends StatelessWidget {{
       name = clase['name']
       relationships = self.parsed_relationships
       attributes = clase.get('attributes', [])
+      for attr in attributes:
+          if 'name' in attr and attr['name']:
+              attr['name'] = re.sub(r'^[+\-#~]\s*', '', attr['name'])
 
       # Detectar clase padre (herencia)
       parent_class = None
