@@ -35,3 +35,9 @@ __pycache__/
 *.log
 .DS_Store
 Thumbs.db
+
+# Test downloads
+Proyecto de Prueva/
+Proyecto de Prueba/
+proyecto_prueba/
+
