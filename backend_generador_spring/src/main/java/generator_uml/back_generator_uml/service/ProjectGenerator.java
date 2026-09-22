@@ -209,7 +209,7 @@ public class ProjectGenerator {
             for (var attr : c.getAttributes()) {
                 Map<String, Object> a = new HashMap<>();
                 String type = TypeMapper.toJava(attr.getType());
-                String rawName = attr.getName() == null ? "" : attr.getName().replaceAll("^[+\\-#~]\\s*", "");
+                String rawName = attr.getName() == null ? "" : attr.getName().replaceAll("^[^a-zA-Z0-9_]+", "").trim();
                 String name = NamingUtil.toField(rawName);
 
                 boolean isNumeric = type.equalsIgnoreCase("int")
@@ -602,11 +602,11 @@ public class ProjectGenerator {
         if (c == null || c.getAttributes() == null || c.getAttributes().isEmpty()) {
             return null;
         }
-        String classNameLower = (c.getName() != null) ? c.getName().toLowerCase().trim() : "";
+        String classNameLower = (c.getName() != null) ? c.getName().replaceAll("^[^a-zA-Z0-9_]+", "").toLowerCase().trim() : "";
         // 1. Prioridad: atributo con nombre 'id', 'id_...', '..._id', 'id' + nombreClase
         for (var attr : c.getAttributes()) {
             if (attr == null || attr.getName() == null) continue;
-            String name = attr.getName().toLowerCase().trim();
+            String name = attr.getName().replaceAll("^[^a-zA-Z0-9_]+", "").toLowerCase().trim();
             if (name.equals("id") || name.equals("id_" + classNameLower) || name.equals("id" + classNameLower) || name.startsWith("id_") || name.endsWith("_id")) {
                 return attr;
             }

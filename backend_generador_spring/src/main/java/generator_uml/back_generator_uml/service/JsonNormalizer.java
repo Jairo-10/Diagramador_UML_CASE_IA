@@ -95,7 +95,6 @@ public class JsonNormalizer {
 
     private static String toCamelCase(String s) {
         if (s == null || s.isBlank()) return "field";
-        s = s.trim();
-        return Character.toLowerCase(s.charAt(0)) + (s.length() > 1 ? s.substring(1) : "");
+        return NamingUtil.toField(s);
     }
 }

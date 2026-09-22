@@ -2,8 +2,8 @@ package generator_uml.back_generator_uml.service;
 
 public class TypeMapper {
     public static String toJava(String t) {
-        if (t == null) return "String";
-        String s = t.trim().toLowerCase();
+        if (t == null || t.isBlank()) return "String";
+        String s = t.replaceAll("^[^a-zA-Z0-9_]+", "").trim().toLowerCase();
 
         return switch (s) {
             case "void" -> "void";
