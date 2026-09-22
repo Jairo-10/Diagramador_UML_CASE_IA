@@ -14,7 +14,7 @@ class FlutterCRUDGenerator:
             if 'attributes' in cls:
                 for attr in cls['attributes']:
                     if 'name' in attr and attr['name']:
-                        attr['name'] = re.sub(r'^[+\-#~]\s*', '', attr['name'])
+                        attr['name'] = re.sub(r'^[^a-zA-Z0-9_]+', '', attr['name'])
         
         self.classes = classes
         self.relationships = uml_json.get('relationships', [])
