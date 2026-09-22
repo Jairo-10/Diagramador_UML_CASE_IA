@@ -215,6 +215,71 @@ class FlutterCRUDGenerator:
         
         return intermediate_entities
     
+    def _get_all_class_attributes(self, class_name):
+        """Obtiene recursivamente todos los atributos de una clase incluyendo herencia."""
+        attrs = []
+        current_class = next((c for c in self.classes if c['name'] == class_name), None)
+        if current_class:
+            parent_rels = [r for r in self.parsed_relationships if r["from"] == class_name and r["kind"] == "inherits"]
+            if parent_rels:
+                parent_name = parent_rels[0]["to"]
+                attrs.extend(self._get_all_class_attributes(parent_name))
+            
+            existing_attr_names = {a['name'].lower() for a in attrs}
+            for attr in current_class.get('attributes', []):
+                if attr['name'].lower() not in existing_attr_names:
+                    attrs.append(attr)
+        return attrs
+
+    def _get_smart_display_expression(self, class_name, var_name="item"):
+        """Determina la mejor expresión de Dart para mostrar un objeto en listas y dropdowns."""
+        attrs = self._get_all_class_attributes(class_name)
+        attr_map = {a['name'].lower(): a['name'] for a in attrs}
+        
+        # Caso 1: Tiene nombre y apellido (e.g. Persona, Estudiante, Docente, Cliente, Empleado)
+        if 'nombre' in attr_map and 'apellido' in attr_map:
+            n_name = attr_map['nombre']
+            a_name = attr_map['apellido']
+            if var_name == "this" or not var_name:
+                return f"'$nombre $apellido'"
+            return f"'${{{var_name}.{n_name}}} ${{{var_name}.{a_name}}}'"
+        
+        # Caso 2: Atributos comúnmente descriptivos
+        priority_names = [
+            'nombre', 'name', 'titulo', 'title', 'descripcion', 'description',
+            'razonsocial', 'razon_social', 'sigla', 'codigo', 'codigorude',
+            'codigo_rude', 'codigoverificacion', 'codigo_verificacion', 'email', 'correo', 'tema'
+        ]
+        for p in priority_names:
+            if p in attr_map:
+                field_name = attr_map[p]
+                if var_name == "this" or not var_name:
+                    return f"'${field_name}'"
+                return f"{var_name}.{field_name}.toString()"
+        
+        # Caso 3: Primer atributo de tipo String que no sea id/activo/estado/password/foto
+        ignored = {'id', 'activo', 'status', 'estado', 'password', 'clave', 'foto', 'imagen', 'img'}
+        for a in attrs:
+            if a['name'].lower() not in ignored and self._convert_type(a['type']) == 'String':
+                field_name = a['name']
+                if var_name == "this" or not var_name:
+                    return f"'${field_name}'"
+                return f"{var_name}.{field_name}.toString()"
+        
+        # Caso 4: Primer atributo que no sea PK / ID
+        non_pk_attrs = [a for a in attrs if a['name'].lower() != 'id']
+        if non_pk_attrs:
+            field_name = non_pk_attrs[0]['name']
+            if var_name == "this" or not var_name:
+                return f"'${field_name}'"
+            return f"{var_name}.{field_name}.toString()"
+        
+        # Fallback: ID
+        pk_name = attrs[0]['name'] if attrs else 'id'
+        if var_name == "this" or not var_name:
+            return f"'${pk_name}'"
+        return f"{var_name}.{pk_name}.toString()"
+
     def _create_folder_structure(self, base_path):
         """Crea la estructura de carpetas del proyecto"""
         folders = [
@@ -781,17 +846,8 @@ class HomePage extends StatelessWidget {{
       # toJson - no se necesita manejo especial, la PK está en los atributos  
       id_to_json = ""
 
-      # Generar método toString() con los 2 primeros atributos significativos (sin id)
-      display_attrs = [attr for attr in attributes if attr['name'].lower() != 'id'][:2]
-      if display_attrs:
-          to_string_parts = [f"'{attr['name']}: ${{{attr['name']}}}'" for attr in display_attrs]
-          to_string_body = ' + ", " + '.join(to_string_parts)
-      else:
-          # Si no hay atributos además del id, usar el id o pk_name
-          if pk_name:
-              to_string_body = f"'ID: ${{{pk_name}}}'"
-          else:
-              to_string_body = f"'ID: ${{id}}'"
+      # Generar método toString() inteligente (considerando atributos propios y heredados)
+      to_string_body = self._get_smart_display_expression(name, var_name="this")
 
       content = f"""{imports}
 
@@ -1020,8 +1076,8 @@ class {name}Service {{
         pk_attr = all_attributes[0] if all_attributes else None
         pk_name = pk_attr['name'] if pk_attr else 'id'
         
-        # Segundo atributo para mostrar en la lista (o el primero si solo hay uno)
-        display_attr = all_attributes[1]['name'] if len(all_attributes) > 1 else pk_name
+        # Expresión inteligente para título de la tarjeta
+        display_title_expr = self._get_smart_display_expression(name, var_name="item")
         
         content = f"""import 'package:flutter/material.dart';
 import '../models/{snake_name}.dart';
@@ -1106,7 +1162,7 @@ class _{name}ListViewState extends State<{name}ListView> {{
                         vertical: 8,
                       ),
                       child: ListTile(
-                        title: Text(item.{display_attr}.toString()),
+                        title: Text({display_title_expr}),
                         subtitle: Text('{pk_name}: ${{item.{pk_name}}}'),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -1345,9 +1401,6 @@ class _{name}ListViewState extends State<{name}ListView> {{
         # Relaciones ManyToOne → Dropdown (sin coma al final)
         for rel in relationships:
             if rel["kind"] == "many_to_one":
-                # Obtener la PK y display attr de la clase relacionada
-                related_class = next((c for c in self.classes if c['name'] == rel['to']), None)
-                
                 # Función para obtener la PK de una clase (considerando herencia)
                 def get_related_pk(class_name):
                     current = next((c for c in self.classes if c['name'] == class_name), None)
@@ -1361,19 +1414,44 @@ class _{name}ListViewState extends State<{name}ListView> {{
                     return 'id'
                 
                 related_pk = get_related_pk(rel['to'])
-                display_attr = related_pk
-                
-                if related_class:
-                    attrs = related_class.get('attributes', [])
-                    # Buscar el primer atributo que no sea la PK para mostrar
-                    for attr in attrs:
-                        if attr['name'] != related_pk:
-                            display_attr = attr['name']
-                            break
+                display_expr = self._get_smart_display_expression(rel['to'], var_name="e")
                 
                 is_self = (rel.get('from') == rel.get('to'))
                 state_var = f"_selected{rel['to']}PadreId" if is_self else f"_selected{rel['to']}Id"
                 label_txt = f"{rel['to']} Padre" if is_self else f"{rel['to']}"
+                
+                if is_self:
+                    valid_val_expr = f"""final validValue = {state_var} != null && {state_var}!.isNotEmpty && 
+                    uniqueItems.any((e) => e.{related_pk}.toString() == {state_var})
+                    ? {state_var}
+                    : '';"""
+                    items_expr = f"""[
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('-- Ninguno ({rel['to']} Raíz) --'),
+                    ),
+                    ...uniqueItems.map((e) => DropdownMenuItem(
+                      value: e.{related_pk}.toString(),
+                      child: Text({display_expr}),
+                    )),
+                  ]"""
+                    validator_expr = "validator: (value) => null,"
+                else:
+                    valid_val_expr = f"""final validValue = {state_var} != null && 
+                    uniqueItems.any((e) => e.{related_pk}.toString() == {state_var})
+                    ? {state_var}
+                    : null;"""
+                    items_expr = f"""uniqueItems.map((e) => DropdownMenuItem(
+                    value: e.{related_pk}.toString(),
+                    child: Text({display_expr}),
+                  )).toList()"""
+                    validator_expr = """validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Este campo es requerido';
+                    }
+                    return null;
+                  },"""
+
                 form_fields.append(f"""FutureBuilder<List<{rel['to']}>>(
               future: {rel['to']}Service().getAll(),
               builder: (context, snapshot) {{
@@ -1384,28 +1462,17 @@ class _{name}ListViewState extends State<{name}ListView> {{
                   for (var item in items) item.{related_pk}.toString(): item
                 }}.values.toList();
                 // Verificar que el valor seleccionado exista en la lista
-                final validValue = {state_var} != null && 
-                    uniqueItems.any((e) => e.{related_pk}.toString() == {state_var})
-                    ? {state_var}
-                    : null;
+                {valid_val_expr}
                 return DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: '{label_txt}'),
                   value: validValue,
-                  items: uniqueItems.map((e) => DropdownMenuItem(
-                    value: e.{related_pk}.toString(),
-                    child: Text(e.{display_attr}.toString()),
-                  )).toList(),
+                  items: {items_expr},
                   onChanged: (v) {{
                     setState(() {{
                       {state_var} = v;
                     }});
                   }},
-                  validator: (value) {{
-                    if (value == null || value.isEmpty) {{
-                      return 'Este campo es requerido';
-                    }}
-                    return null;
-                  }},
+                  {validator_expr}
                 );
               }},
             )""")
@@ -1416,10 +1483,6 @@ class _{name}ListViewState extends State<{name}ListView> {{
                 field_name = self._to_snake_case(rel['to'])
                 normalized_field = field_name.lower().replace('_', '')
                 if normalized_field not in existing_attr_names_normalized:
-                    # Obtener la PK y display attr de la clase relacionada
-                    related_class = next((c for c in self.classes if c['name'] == rel['to']), None)
-                    
-                    # Función para obtener la PK de una clase (considerando herencia)
                     def get_related_pk_one(class_name):
                         current = next((c for c in self.classes if c['name'] == class_name), None)
                         if current:
@@ -1432,26 +1495,26 @@ class _{name}ListViewState extends State<{name}ListView> {{
                         return 'id'
                     
                     related_pk = get_related_pk_one(rel['to'])
-                    display_attr = related_pk
-                    
-                    if related_class:
-                        attrs = related_class.get('attributes', [])
-                        # Buscar el primer atributo que no sea la PK para mostrar
-                        for attr in attrs:
-                            if attr['name'] != related_pk:
-                                display_attr = attr['name']
-                                break
+                    display_expr = self._get_smart_display_expression(rel['to'], var_name="e")
                     
                     form_fields.append(f"""FutureBuilder<List<{rel['to']}>>(
               future: {rel['to']}Service().getAll(),
               builder: (context, snapshot) {{
                 if (!snapshot.hasData) return const CircularProgressIndicator();
+                final items = snapshot.data!;
+                final uniqueItems = {{
+                  for (var item in items) item.{related_pk}.toString(): item
+                }}.values.toList();
+                final validValue = _selected{rel['to']}Id != null && 
+                    uniqueItems.any((e) => e.{related_pk}.toString() == _selected{rel['to']}Id)
+                    ? _selected{rel['to']}Id
+                    : null;
                 return DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: '{rel['to']}'),
-                  value: _selected{rel['to']}Id,
-                  items: snapshot.data!.map((e) => DropdownMenuItem(
+                  value: validValue,
+                  items: uniqueItems.map((e) => DropdownMenuItem(
                     value: e.{related_pk}.toString(),
-                    child: Text(e.{display_attr}.toString()),
+                    child: Text({display_expr}),
                   )).toList(),
                   onChanged: (v) {{
                     setState(() {{
@@ -1818,15 +1881,8 @@ class _{name}FormViewState extends State<{name}FormView> {{
                 )),""")
                     
                     if not is_intermediate or len(intermediate_relations) != 2:
-                        # Relación OneToMany normal: Mostrar el primer atributo descriptivo
-                        display_attr = 'id'
-                        if related_class:
-                            attrs = related_class.get('attributes', [])
-                            # Buscar un atributo descriptivo (no id)
-                            for attr in attrs:
-                                if attr['name'].lower() not in ['id']:
-                                    display_attr = attr['name']
-                                    break
+                        # Relación OneToMany normal: Mostrar smart display expression
+                        smart_disp = self._get_smart_display_expression(rel['to'], var_name="e")
                         
                         detail_rows.append(f"""              const SizedBox(height: 16),
               Text('{rel['to']}s:', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -1839,7 +1895,7 @@ class _{name}FormViewState extends State<{name}FormView> {{
               else
                 ...item.{field_name}.map((e) => Padding(
                   padding: const EdgeInsets.only(left: 16, bottom: 4),
-                  child: Text('• ${{e.{display_attr}.toString()}}', style: const TextStyle(fontSize: 14)),
+                  child: Text('• ' + {smart_disp}, style: const TextStyle(fontSize: 14)),
                 )),""")
             elif rel["kind"] == "one_to_one" or rel["kind"] == "many_to_one":
                 field_name = m2o_obj_field

@@ -52,17 +52,29 @@ public class {{EntityName}}Controller {
             try {
 {{#manyToOne}}
                 // Manejar relación ManyToOne: {{targetField}}
-                if (key.equals("{{targetField}}id") && value != null) {
-                    Long relId = convertToLong(value);
-                    service.find{{TargetEntity}}ById(relId).ifPresent(entity::set{{targetFieldCap}});
+                if (key.replace("_", "").equalsIgnoreCase("{{targetField}}id".replace("_", ""))) {
+                    if (value != null && !value.toString().trim().isEmpty() && !value.toString().trim().equals("0")) {
+                        Long relId = convertToLong(value);
+                        if (relId != null) {
+                            service.find{{TargetEntity}}ById(relId).ifPresent(entity::set{{targetFieldCap}});
+                        }
+                    } else {
+                        entity.set{{targetFieldCap}}(null);
+                    }
                     return;
                 }
 {{/manyToOne}}
 {{#oneToOne}}
                 // Manejar relación OneToOne: {{targetField}}
-                if (key.equals("{{targetField}}id") && value != null) {
-                    Long relId = convertToLong(value);
-                    service.find{{TargetEntity}}ById(relId).ifPresent(entity::set{{targetFieldCap}});
+                if (key.replace("_", "").equalsIgnoreCase("{{targetField}}id".replace("_", ""))) {
+                    if (value != null && !value.toString().trim().isEmpty() && !value.toString().trim().equals("0")) {
+                        Long relId = convertToLong(value);
+                        if (relId != null) {
+                            service.find{{TargetEntity}}ById(relId).ifPresent(entity::set{{targetFieldCap}});
+                        }
+                    } else {
+                        entity.set{{targetFieldCap}}(null);
+                    }
                     return;
                 }
 {{/oneToOne}}
@@ -85,10 +97,17 @@ public class {{EntityName}}Controller {
     }
     
     private Long convertToLong(Object value) {
+        if (value == null) return null;
         if (value instanceof Number) {
             return ((Number) value).longValue();
         }
-        return Long.parseLong(value.toString());
+        String str = value.toString().trim();
+        if (str.isEmpty()) return null;
+        try {
+            return Long.parseLong(str);
+        } catch (Exception e) {
+            return null;
+        }
     }
     
     private Object convertValue(Object value, Class<?> targetType) {
