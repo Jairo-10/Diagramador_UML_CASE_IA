@@ -20,28 +20,32 @@ from .utils.zip_utils import compress_folder_to_zip
 
 class GenerateUMLView(APIView):
     def post(self, request):
-        prompt = request.data.get("prompt")
-        current_diagram = request.data.get("currentDiagram")
-        if not prompt:
-            return Response({"error": "El campo 'prompt' es requerido"}, status=status.HTTP_400_BAD_REQUEST)
-
-        output = call_gemini(prompt, current_diagram)
-
-        # 🧹 Limpiar bloque de código Markdown si viene envuelto en ```json ... ```
-        if isinstance(output, str):
-            output = re.sub(r"^```json\s*|\s*```$", "",
-                            output.strip(), flags=re.MULTILINE)
-
         try:
-            parsed_json = json.loads(output)
+            prompt = request.data.get("prompt")
+            current_diagram = request.data.get("currentDiagram")
+            if not prompt:
+                return Response({"error": "El campo 'prompt' es requerido"}, status=status.HTTP_400_BAD_REQUEST)
+
+            output = call_gemini(prompt, current_diagram)
+
+            # 🧹 Extracción robusta de JSON entre llaves {}
+            if isinstance(output, str):
+                start_idx = output.find('{')
+                end_idx = output.rfind('}')
+                if start_idx != -1 and end_idx != -1:
+                    clean_json = output[start_idx:end_idx + 1]
+                else:
+                    clean_json = output
+            else:
+                clean_json = json.dumps(output)
+
+            parsed_json = json.loads(clean_json)
+            return Response(parsed_json, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({
-                "error": "Gemini devolvió un formato inválido",
-                "raw": output,
-                "exception": str(e)
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response(parsed_json, status=status.HTTP_200_OK)
+                "error": f"Error al procesar solicitud con IA: {str(e)}",
+                "message": "La IA no pudo procesar la solicitud en este momento."
+            }, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])

@@ -80,7 +80,10 @@ def call_gemini(prompt: str, current_diagram: dict = None):
     }
 
     # Sanitizar estado del diagrama actual para ahorrar tokens y acelerar la inferencia
-    sanitized_diag = _sanitize_diagram_for_llm(current_diagram) if current_diagram else {}
+    try:
+        sanitized_diag = _sanitize_diagram_for_llm(current_diagram) if current_diagram else {}
+    except Exception:
+        sanitized_diag = {}
     
     context_str = "Lienzo actualmente vacío. Modela desde cero."
     if sanitized_diag.get("classes") or sanitized_diag.get("relationships"):
@@ -138,7 +141,7 @@ FORMATO OBLIGATORIO (JSON PURO):
         "generationConfig": {
             "responseMimeType": "application/json",
             "temperature": 0.1,
-            "maxOutputTokens": 2500
+            "maxOutputTokens": 8192
         }
     }
 
