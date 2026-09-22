@@ -141,11 +141,11 @@ FORMATO OBLIGATORIO (JSON PURO):
         }
     }
 
-    # Modelos Flash ultrarrápidos y de máxima eficiencia de cuota
+    # Modelos Flash ultrarrápidos y de alta disponibilidad sin saturación (2026)
     MODELS = [
-        "gemini-2.5-flash",
-        "gemini-1.5-flash",
-        "gemini-2.0-flash",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
         "gemini-flash-latest",
         "gemini-3.7-flash"
     ]
@@ -154,7 +154,7 @@ FORMATO OBLIGATORIO (JSON PURO):
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=30)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=15)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result['candidates'][0]['content']['parts'][0]['text']
@@ -317,9 +317,9 @@ Devuelve ESTRICTAMENTE este formato JSON:
     }
 
     MODELS = [
-        "gemini-2.5-flash",
-        "gemini-1.5-flash",
-        "gemini-2.0-flash",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite",
+        "gemini-3.5-flash-lite",
         "gemini-flash-latest",
         "gemini-3.7-flash"
     ]
@@ -328,7 +328,7 @@ Devuelve ESTRICTAMENTE este formato JSON:
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=45)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=20)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result["candidates"][0]["content"]["parts"][0]["text"]
