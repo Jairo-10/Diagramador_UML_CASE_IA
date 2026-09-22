@@ -460,35 +460,23 @@ class HomePage extends StatelessWidget {{
       rel_fields = []
       for rel in relationships:
           if rel["from"] == name:
-              if rel["kind"] == "many_to_one":
-                  # ManyToOne: ID (para enviar) + objeto completo opcional (para leer del GET)
-                  field_name = f"{self._to_snake_case(rel['to'])}Id"
-                  normalized_field = field_name.lower().replace('_', '')
+              is_self_rel = (rel["from"] == rel["to"])
+              base_to = self._to_snake_case(rel['to'])
+              m2o_field_id = f"{base_to}PadreId" if is_self_rel else f"{base_to}Id"
+              m2o_obj_field = f"{base_to}Padre" if is_self_rel else f"{base_to}"
+              o2m_list_field = f"sub{base_to}s" if is_self_rel else f"{base_to}"
+
+              if rel["kind"] in ["many_to_one", "one_to_one"]:
+                  normalized_field = m2o_field_id.lower().replace('_', '')
                   if normalized_field not in existing_attr_names:
-                      rel_fields.append(f"  final String {field_name};")
-                  # Agregar también el objeto completo (nullable, solo para lectura)
-                  obj_field_name = self._to_snake_case(rel['to'])
-                  normalized_obj = obj_field_name.lower().replace('_', '')
+                      rel_fields.append(f"  final String {m2o_field_id};")
+                  normalized_obj = m2o_obj_field.lower().replace('_', '')
                   if normalized_obj not in existing_attr_names:
-                      rel_fields.append(f"  final {rel['to']}? {obj_field_name};")
-              elif rel["kind"] == "one_to_one":
-                  # OneToOne: ID (para enviar) + objeto completo opcional (para leer del GET)
-                  field_name = f"{self._to_snake_case(rel['to'])}Id"
-                  normalized_field = field_name.lower().replace('_', '')
-                  if normalized_field not in existing_attr_names:
-                      rel_fields.append(f"  final String {field_name};")
-                  # Agregar también el objeto completo (nullable, solo para lectura)
-                  obj_field_name = self._to_snake_case(rel['to'])
-                  normalized_obj = obj_field_name.lower().replace('_', '')
-                  if normalized_obj not in existing_attr_names:
-                      rel_fields.append(f"  final {rel['to']}? {obj_field_name};")
+                      rel_fields.append(f"  final {rel['to']}? {m2o_obj_field};")
               elif rel["kind"] == "one_to_many":
-                  # OneToMany: Lista de objetos completos (solo para lectura desde GET)
-                  # El backend devuelve la lista anidada en GET, pero NO se envía en POST/PUT
-                  field_name = self._to_snake_case(rel['to'])
-                  normalized_field = field_name.lower().replace('_', '')
+                  normalized_field = o2m_list_field.lower().replace('_', '')
                   if normalized_field not in existing_attr_names:
-                      rel_fields.append(f"  final List<{rel['to']}> {field_name};")
+                      rel_fields.append(f"  final List<{rel['to']}> {o2m_list_field};")
       properties.extend(rel_fields)
 
       # Constructor con super() si hay herencia
@@ -572,34 +560,23 @@ class HomePage extends StatelessWidget {{
       
       for rel in relationships:
           if rel["from"] == name:
-              if rel["kind"] == "many_to_one":
-                  # Agregar FK (ID) para relaciones ManyToOne (required)
-                  field_name = f"{self._to_snake_case(rel['to'])}Id"
-                  normalized_field = field_name.lower().replace('_', '')
+              is_self_rel = (rel["from"] == rel["to"])
+              base_to = self._to_snake_case(rel['to'])
+              m2o_field_id = f"{base_to}PadreId" if is_self_rel else f"{base_to}Id"
+              m2o_obj_field = f"{base_to}Padre" if is_self_rel else f"{base_to}"
+              o2m_list_field = f"sub{base_to}s" if is_self_rel else f"{base_to}"
+
+              if rel["kind"] in ["many_to_one", "one_to_one"]:
+                  normalized_field = m2o_field_id.lower().replace('_', '')
                   if normalized_field not in existing_attr_names_normalized:
-                      constructor_params_list.append(f"required this.{field_name}")
-                  # Agregar objeto completo (opcional, default null)
-                  obj_field_name = self._to_snake_case(rel['to'])
-                  normalized_obj = obj_field_name.lower().replace('_', '')
+                      constructor_params_list.append(f"this.{m2o_field_id} = ''")
+                  normalized_obj = m2o_obj_field.lower().replace('_', '')
                   if normalized_obj not in existing_attr_names_normalized:
-                      constructor_params_list.append(f"this.{obj_field_name}")
-              elif rel["kind"] == "one_to_one":
-                  # Agregar FK (ID) para relaciones OneToOne (required)
-                  field_name = f"{self._to_snake_case(rel['to'])}Id"
-                  normalized_field = field_name.lower().replace('_', '')
-                  if normalized_field not in existing_attr_names_normalized:
-                      constructor_params_list.append(f"required this.{field_name}")
-                  # Agregar objeto completo (opcional, default null)
-                  obj_field_name = self._to_snake_case(rel['to'])
-                  normalized_obj = obj_field_name.lower().replace('_', '')
-                  if normalized_obj not in existing_attr_names_normalized:
-                      constructor_params_list.append(f"this.{obj_field_name}")
+                      constructor_params_list.append(f"this.{m2o_obj_field}")
               elif rel["kind"] == "one_to_many":
-                  # OneToMany: Lista opcional (vacía por defecto para POST/PUT, poblada en GET)
-                  field_name = self._to_snake_case(rel['to'])
-                  normalized_field = field_name.lower().replace('_', '')
+                  normalized_field = o2m_list_field.lower().replace('_', '')
                   if normalized_field not in existing_attr_names_normalized:
-                      constructor_params_list.append(f"this.{field_name} = const []")
+                      constructor_params_list.append(f"this.{o2m_list_field} = const []")
       constructor_params = ", ".join(constructor_params_list)
       
       # Generar llamada al super() si hay herencia
@@ -695,45 +672,27 @@ class HomePage extends StatelessWidget {{
       # Agregar relaciones - parsear IDs, objetos anidados y listas
       for rel in relationships:
           if rel["from"] == name:
-              rel_name = self._to_snake_case(rel['to'])
-              if rel["kind"] == "many_to_one":
-                  # Parsear el ID de la relación ManyToOne
-                  # Puede venir como campo separado 'personaid' o dentro del objeto 'persona.id'
-                  field_name = f"{rel_name}Id"
-                  fk_json_key = self._to_backend_json_key(field_name)
-                  json_key = self._to_backend_json_key(rel_name)
-                  
-                  # Intentar obtener el ID de múltiples fuentes: campo directo, objeto.id, o conversión de int
-                  id_parsing = f"{field_name}: json['{fk_json_key}'] != null ? json['{fk_json_key}'].toString() : (json['{json_key}'] is Map ? json['{json_key}']['id']?.toString() : json['{json_key}']?.toString()) ?? ''"
+              is_self_rel = (rel["from"] == rel["to"])
+              base_to = self._to_snake_case(rel['to'])
+              m2o_field_id = f"{base_to}PadreId" if is_self_rel else f"{base_to}Id"
+              m2o_obj_field = f"{base_to}Padre" if is_self_rel else f"{base_to}"
+              o2m_list_field = f"sub{base_to}s" if is_self_rel else f"{base_to}"
+
+              if rel["kind"] in ["many_to_one", "one_to_one"]:
+                  fk_json_key = self._to_backend_json_key(m2o_field_id)
+                  json_key = self._to_backend_json_key(m2o_obj_field)
+                  id_parsing = f"{m2o_field_id}: json['{fk_json_key}'] != null ? json['{fk_json_key}'].toString() : (json['{json_key}'] is Map ? json['{json_key}']['id']?.toString() : json['{json_key}']?.toString()) ?? ''"
                   from_json_fields.append(id_parsing)
-                  
-                  # Parsear también el objeto completo si viene anidado en el JSON (validar que sea Map)
-                  from_json_fields.append(f"{rel_name}: json['{json_key}'] is Map<String, dynamic> ? {rel['to']}.fromJson(json['{json_key}']) : null")
-              elif rel["kind"] == "one_to_one":
-                  # Parsear el ID de la relación OneToOne
-                  # Puede venir como campo separado o dentro del objeto
-                  field_name = f"{rel_name}Id"
-                  fk_json_key = self._to_backend_json_key(field_name)
-                  json_key = self._to_backend_json_key(rel_name)
-                  
-                  # Intentar obtener el ID de múltiples fuentes
-                  id_parsing = f"{field_name}: json['{fk_json_key}'] != null ? json['{fk_json_key}'].toString() : (json['{json_key}'] is Map ? json['{json_key}']['id']?.toString() : json['{json_key}']?.toString()) ?? ''"
-                  from_json_fields.append(id_parsing)
-                  
-                  # Parsear también el objeto completo si viene anidado en el JSON (validar que sea Map)
-                  from_json_fields.append(f"{rel_name}: json['{json_key}'] is Map<String, dynamic> ? {rel['to']}.fromJson(json['{json_key}']) : null")
+                  from_json_fields.append(f"{m2o_obj_field}: json['{json_key}'] is Map<String, dynamic> ? {rel['to']}.fromJson(json['{json_key}']) : null")
               elif rel["kind"] == "one_to_many":
-                  # OneToMany: Parsear lista de objetos anidados que vienen en GET
-                  # El backend puede devolver listas mixtas [objeto, id, objeto] debido a @JsonIdentityInfo
-                  # Filtrar solo los objetos completos (Maps), omitir los IDs sueltos
-                  json_key = self._to_backend_json_key(rel_name)
+                  json_key = self._to_backend_json_key(o2m_list_field)
                   parse_logic = f"""json['{json_key}'] is List 
           ? (json['{json_key}'] as List)
               .whereType<Map<String, dynamic>>()
               .map((e) => {rel['to']}.fromJson(e))
               .toList()
           : []"""
-                  from_json_fields.append(f"{rel_name}: {parse_logic}")
+                  from_json_fields.append(f"{o2m_list_field}: {parse_logic}")
 
       # toJson - incluir campos heredados también
       to_json_fields = []
@@ -803,19 +762,13 @@ class HomePage extends StatelessWidget {{
       # Agregar relaciones - ENVIAR SOLO IDs, NO objetos completos
       for rel in relationships:
           if rel["from"] == name:
-              rel_name = self._to_snake_case(rel['to'])
-              if rel["kind"] == "many_to_one":
-                  # Para ManyToOne: enviar solo el ID (formato: personaId)
-                  field_name = f"{rel_name}Id"
-                  fk_json_key = self._to_backend_json_key(field_name)
-                  to_json_fields.append(f"'{fk_json_key}': {field_name}")
-              elif rel["kind"] == "one_to_one":
-                  # Para OneToOne: enviar solo el ID (formato: relacionId)
-                  field_name = f"{rel_name}Id"
-                  fk_json_key = self._to_backend_json_key(field_name)
-                  to_json_fields.append(f"'{fk_json_key}': {field_name}")
+              is_self_rel = (rel["from"] == rel["to"])
+              base_to = self._to_snake_case(rel['to'])
+              m2o_field_id = f"{base_to}PadreId" if is_self_rel else f"{base_to}Id"
+              if rel["kind"] in ["many_to_one", "one_to_one"]:
+                  fk_json_key = self._to_backend_json_key(m2o_field_id)
+                  to_json_fields.append(f"'{fk_json_key}': {m2o_field_id}")
               elif rel["kind"] == "one_to_many":
-                  # OneToMany NO se envía en el formulario (se gestiona desde el lado "many")
                   pass
 
       # Generar el constructor - no se necesitan parámetros extra para PK
