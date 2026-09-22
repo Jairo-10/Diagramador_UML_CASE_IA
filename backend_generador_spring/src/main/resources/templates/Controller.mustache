@@ -102,7 +102,19 @@ public class {{EntityName}}Controller {
         if (targetType == Float.class || targetType == float.class) return Float.parseFloat(strValue);
         if (targetType == Boolean.class || targetType == boolean.class) return Boolean.parseBoolean(strValue);
         if (targetType == BigDecimal.class) return new BigDecimal(strValue);
-        if (targetType == LocalDate.class) return LocalDate.parse(strValue);
+        if (targetType == LocalDate.class) {
+            try {
+                return LocalDate.parse(strValue);
+            } catch (Exception e) {
+                if (strValue.contains("/")) {
+                    String[] p = strValue.split("/");
+                    if (p.length == 3) {
+                        return LocalDate.of(Integer.parseInt(p[2].trim()), Integer.parseInt(p[1].trim()), Integer.parseInt(p[0].trim()));
+                    }
+                }
+                return null;
+            }
+        }
         if (targetType == LocalDateTime.class) return LocalDateTime.parse(strValue);
         
         return value;
