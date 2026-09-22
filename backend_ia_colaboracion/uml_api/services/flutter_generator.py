@@ -1267,9 +1267,12 @@ class _{name}ListViewState extends State<{name}ListView> {{
         
         all_relations = get_all_relations_for_state(name)
         for rel in all_relations:
-            rel_key = f"{rel['to']}"
+            is_self = (rel.get('from') == rel.get('to'))
+            base_to = self._to_snake_case(rel['to'])
+            rel_key = f"{base_to}_padre" if is_self else f"{rel['to']}"
+            state_var = f"_selected{rel['to']}PadreId" if is_self else f"_selected{rel['to']}Id"
             if rel_key not in added_relations:
-                controllers_list.append(f"String? _selected{rel['to']}Id;")
+                controllers_list.append(f"String? {state_var};")
                 added_relations.add(rel_key)
         
         # Relaciones one_to_many NO necesitan variables de estado en el formulario
@@ -1290,12 +1293,13 @@ class _{name}ListViewState extends State<{name}ListView> {{
         # Usar las mismas relaciones que ya obtuvimos antes
         initialized_relations = set()
         for rel in all_relations:
-            rel_key = f"{rel['to']}"
+            is_self = (rel.get('from') == rel.get('to'))
+            base_to = self._to_snake_case(rel['to'])
+            rel_key = f"{base_to}_padre" if is_self else f"{rel['to']}"
+            field_name = f"{base_to}PadreId" if is_self else f"{base_to}Id"
+            state_var = f"_selected{rel['to']}PadreId" if is_self else f"_selected{rel['to']}Id"
             if rel_key not in initialized_relations:
-                field_name = f"{self._to_snake_case(rel['to'])}Id"
-                # Convertir a String y manejar valores vacíos para evitar que sea ""
-                # El dropdown espera null o un valor válido que exista en la lista
-                init_controllers_list.append(f"if (widget.item!.{field_name}.isNotEmpty) {{ _selected{rel['to']}Id = widget.item!.{field_name}; }}")
+                init_controllers_list.append(f"if (widget.item!.{field_name}.isNotEmpty) {{ {state_var} = widget.item!.{field_name}; }}")
                 initialized_relations.add(rel_key)
         
         # Relaciones one_to_many NO se inicializan en el formulario
@@ -1367,6 +1371,9 @@ class _{name}ListViewState extends State<{name}ListView> {{
                             display_attr = attr['name']
                             break
                 
+                is_self = (rel.get('from') == rel.get('to'))
+                state_var = f"_selected{rel['to']}PadreId" if is_self else f"_selected{rel['to']}Id"
+                label_txt = f"{rel['to']} Padre" if is_self else f"{rel['to']}"
                 form_fields.append(f"""FutureBuilder<List<{rel['to']}>>(
               future: {rel['to']}Service().getAll(),
               builder: (context, snapshot) {{
@@ -1377,12 +1384,12 @@ class _{name}ListViewState extends State<{name}ListView> {{
                   for (var item in items) item.{related_pk}.toString(): item
                 }}.values.toList();
                 // Verificar que el valor seleccionado exista en la lista
-                final validValue = _selected{rel['to']}Id != null && 
-                    uniqueItems.any((e) => e.{related_pk}.toString() == _selected{rel['to']}Id)
-                    ? _selected{rel['to']}Id
+                final validValue = {state_var} != null && 
+                    uniqueItems.any((e) => e.{related_pk}.toString() == {state_var})
+                    ? {state_var}
                     : null;
                 return DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: '{rel['to']}'),
+                  decoration: const InputDecoration(labelText: '{label_txt}'),
                   value: validValue,
                   items: uniqueItems.map((e) => DropdownMenuItem(
                     value: e.{related_pk}.toString(),
@@ -1390,7 +1397,7 @@ class _{name}ListViewState extends State<{name}ListView> {{
                   )).toList(),
                   onChanged: (v) {{
                     setState(() {{
-                      _selected{rel['to']}Id = v;
+                      {state_var} = v;
                     }});
                   }},
                   validator: (value) {{
@@ -1518,10 +1525,13 @@ class _{name}ListViewState extends State<{name}ListView> {{
         many_to_one_fields = []
         for rel in relationships:
             if rel["kind"] == "many_to_one":
-                field_name = f"{self._to_snake_case(rel['to'])}Id"
+                is_self = (rel.get('from') == rel.get('to'))
+                base_to = self._to_snake_case(rel['to'])
+                field_name = f"{base_to}PadreId" if is_self else f"{base_to}Id"
+                state_var = f"_selected{rel['to']}PadreId" if is_self else f"_selected{rel['to']}Id"
                 normalized_field = field_name.lower().replace('_', '')
                 if normalized_field not in existing_attr_names_normalized:
-                    many_to_one_fields.append(f"{field_name}: _selected{rel['to']}Id ?? ''")
+                    many_to_one_fields.append(f"{field_name}: {state_var} ?? ''")
         
         if many_to_one_fields:
             if create_object_fields:
@@ -1720,9 +1730,13 @@ class _{name}FormViewState extends State<{name}FormView> {{
         
         # Agregar relaciones
         for rel in relationships:
+            is_self = (rel.get('from') == rel.get('to'))
+            base_to = self._to_snake_case(rel['to'])
+            m2o_obj_field = f"{base_to}Padre" if is_self else f"{base_to}"
+            o2m_list_field = f"sub{base_to}s" if is_self else f"{base_to}"
+
             if rel["kind"] == "one_to_many":
-                # OneToMany: Mostrar lista de objetos relacionados (viene del backend en GET)
-                field_name = self._to_snake_case(rel['to'])
+                field_name = o2m_list_field
                 normalized_field = field_name.lower().replace('_', '')
                 if normalized_field not in existing_attr_names_normalized:
                     # Obtener información de la clase relacionada
@@ -1828,22 +1842,17 @@ class _{name}FormViewState extends State<{name}FormView> {{
                   child: Text('• ${{e.{display_attr}.toString()}}', style: const TextStyle(fontSize: 14)),
                 )),""")
             elif rel["kind"] == "one_to_one" or rel["kind"] == "many_to_one":
-                field_name = self._to_snake_case(rel['to'])
+                field_name = m2o_obj_field
+                display_label = f"{rel['to']}Padre" if is_self else f"{rel['to']}"
                 normalized_field = field_name.lower().replace('_', '')
                 if normalized_field not in existing_attr_names_normalized:
-                    # Obtener atributos de la clase relacionada
                     related_class = next((c for c in self.classes if c['name'] == rel['to']), None)
                     if related_class:
                         attrs = related_class.get('attributes', [])
-                        
-                        # Si el objeto está disponible, mostrar los primeros 2 atributos (o 1 si solo tiene 1)
-                        # Filtrar atributos que no sean 'id'
                         display_attrs = [attr for attr in attrs if attr['name'].lower() != 'id']
-                        # Tomar los primeros 2 (o menos si no hay suficientes)
                         attrs_to_show = display_attrs[:2]
-                        
                         for attr in attrs_to_show:
-                            detail_rows.append(f"""              if (item.{field_name} != null) _buildDetailRow('{rel['to']}.{attr['name']}', item.{field_name}!.{attr['name']}.toString()),""")
+                            detail_rows.append(f"""              if (item.{field_name} != null) _buildDetailRow('{display_label}.{attr['name']}', item.{field_name}!.{attr['name']}.toString()),""")
         
         content = f"""import 'package:flutter/material.dart';
 import '../models/{snake_name}.dart';
