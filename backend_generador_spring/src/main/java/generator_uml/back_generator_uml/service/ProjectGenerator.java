@@ -493,9 +493,10 @@ public class ProjectGenerator {
                     String rawParentPkName = parentPkAttr.getName().trim();
                     String parentPkName = !rawParentPkName.isEmpty() ? NamingUtil.toField(rawParentPkName) : "id";
                     String rawParentPkType = parentPkAttr.getType();
-                    String parentPkType = (rawParentPkType != null && !rawParentPkType.trim().isEmpty())
+                    String mappedParentPkType = (rawParentPkType != null && !rawParentPkType.trim().isEmpty())
                             ? TypeMapper.toJava(rawParentPkType)
                             : "Long";
+                    String parentPkType = isNumericType(mappedParentPkType) ? "Long" : mappedParentPkType;
                     String capName = Character.toUpperCase(parentPkName.charAt(0)) + (parentPkName.length() > 1 ? parentPkName.substring(1) : "");
                     String pkSetter = "set" + capName;
                     String pkGetter = "get" + capName;
