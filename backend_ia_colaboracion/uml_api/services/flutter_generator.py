@@ -114,6 +114,7 @@ class FlutterCRUDGenerator:
         # Generar archivos base
         self._generate_pubspec(base_path)
         self._generate_config(base_path)
+        self._generate_web_files(base_path)
         
         # Detectar entidades intermedias de ManyToMany
         intermediate_entities = self._detect_intermediate_entities()
@@ -287,10 +288,46 @@ class FlutterCRUDGenerator:
             'lib/services',
             'lib/views',
             'lib/widgets',
+            'web',
         ]
         for folder in folders:
             (base_path / folder).mkdir(parents=True, exist_ok=True)
     
+    def _generate_web_files(self, base_path):
+        """Genera archivos de plataforma Web para que corra directo con flutter run -d chrome"""
+        index_html = """<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Aplicacion Flutter CRUD Generada">
+  <title>CRUD Generator</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
+"""
+        manifest_json = """{
+    "name": "generated_crud_app",
+    "short_name": "generated_crud_app",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0175C2",
+    "theme_color": "#0175C2",
+    "description": "Aplicación Flutter generada automáticamente",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": []
+}
+"""
+        with open(base_path / 'web' / 'index.html', "w", encoding="utf-8") as f:
+            f.write(index_html)
+        with open(base_path / 'web' / 'manifest.json', "w", encoding="utf-8") as f:
+            f.write(manifest_json)
+
     def _generate_pubspec(self, base_path):
         """Genera el archivo pubspec.yaml"""
         content = """name: generated_crud_app
