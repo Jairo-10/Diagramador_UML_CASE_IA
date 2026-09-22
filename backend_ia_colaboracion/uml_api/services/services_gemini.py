@@ -7,8 +7,9 @@ from django.conf import settings
 from uuid import uuid4
 
 # Configurar Sesión Persistente con Reintentos (ISO/IEC 25010 - Fiabilidad)
+# Se ajustan reintentos y factor de retroceso (backoff) para conexiones inestables/lentas.
 gemini_session = requests.Session()
-retries = Retry(total=3, backoff_factor=0.3, status_forcelist=[ 500, 502, 503, 504, 429 ])
+retries = Retry(total=5, backoff_factor=1.5, status_forcelist=[ 500, 502, 503, 504, 429 ])
 gemini_session.mount('https://', HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10))
 
 # Modelo oficial activo en Google AI Studio (2025/2026)
@@ -157,7 +158,7 @@ FORMATO OBLIGATORIO (JSON PURO):
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=15)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=30)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result['candidates'][0]['content']['parts'][0]['text']
@@ -236,7 +237,7 @@ Prompt:
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=20)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=45)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result["candidates"][0]["content"]["parts"][0]["text"]
@@ -351,7 +352,7 @@ Devuelve ESTRICTAMENTE este formato JSON:
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=20)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=45)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result["candidates"][0]["content"]["parts"][0]["text"]
