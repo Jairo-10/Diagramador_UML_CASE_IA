@@ -142,22 +142,22 @@ FORMATO OBLIGATORIO (JSON PURO):
         }
     }
 
-    # Modelos Lite ultrarrápidos (500 peticiones/día y respuesta en <1s) como prioridad 1
+    # Modelos activos con soporte completo de generación JSON
     MODELS = [
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview",
+        "gemini-3.5-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.1-flash-lite",
-        "gemini-2.5-flash",
         "gemini-3.7-flash",
-        "gemini-3.5-flash",
-        "gemini-3.6-flash",
-        "gemini-3.8-flash"
+        "gemini-flash-latest"
     ]
     last_error = None
 
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=8)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=15)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result['candidates'][0]['content']['parts'][0]['text']
@@ -222,20 +222,20 @@ Prompt:
     }
 
     MODELS = [
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview",
+        "gemini-3.5-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.1-flash-lite",
-        "gemini-2.5-flash",
         "gemini-3.7-flash",
-        "gemini-3.5-flash",
-        "gemini-3.6-flash",
-        "gemini-3.8-flash"
+        "gemini-flash-latest"
     ]
     last_error = None
 
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=10)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=18)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result["candidates"][0]["content"]["parts"][0]["text"]
@@ -336,20 +336,20 @@ Devuelve ESTRICTAMENTE este formato JSON:
     }
 
     MODELS = [
+        "gemini-3.6-flash",
+        "gemini-3-flash-preview",
+        "gemini-3.5-flash",
         "gemini-3.5-flash-lite",
         "gemini-3.1-flash-lite",
-        "gemini-2.5-flash",
         "gemini-3.7-flash",
-        "gemini-3.5-flash",
-        "gemini-3.6-flash",
-        "gemini-3.8-flash"
+        "gemini-flash-latest"
     ]
     last_error = None
 
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=15)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=20)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result["candidates"][0]["content"]["parts"][0]["text"]
