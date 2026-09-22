@@ -141,13 +141,16 @@ FORMATO OBLIGATORIO (JSON PURO):
         }
     }
 
-    # Modelos Flash ultrarrápidos y de alta disponibilidad sin saturación (2026)
+    # Modelos Flash ultrarrápidos y de alta disponibilidad sin saturación
     MODELS = [
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite",
-        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.7-flash",
         "gemini-flash-latest",
-        "gemini-3.7-flash"
+        "gemini-3.8-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite"
     ]
     last_error = None
 
@@ -218,15 +221,32 @@ Prompt:
         }
     }
 
-    response = gemini_session.post(GEMINI_API_URL, headers=headers, json=data, timeout=30)
-    response.raise_for_status()
-    result = response.json()
+    MODELS = [
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.7-flash",
+        "gemini-flash-latest",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite"
+    ]
+    last_error = None
 
-    try:
-        text_output = result["candidates"][0]["content"]["parts"][0]["text"]
-        return text_output
-    except (KeyError, IndexError):
-        return json.dumps({"error": "No se pudo parsear la respuesta de análisis de Gemini"})
+    for model in MODELS:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            response = gemini_session.post(url, headers=headers, json=data, timeout=20)
+            if response.status_code == 200:
+                result = response.json()
+                text_output = result["candidates"][0]["content"]["parts"][0]["text"]
+                return text_output
+            else:
+                last_error = response.text
+        except Exception as e:
+            last_error = str(e)
+
+    return json.dumps({"error": f"No se pudo completar el análisis con los modelos de IA: {last_error}"})
 
 
 def call_gemini_from_image(image_base64: str, mime_type: str = "image/png"):
@@ -317,11 +337,14 @@ Devuelve ESTRICTAMENTE este formato JSON:
     }
 
     MODELS = [
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite",
-        "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
+        "gemini-3.7-flash",
         "gemini-flash-latest",
-        "gemini-3.7-flash"
+        "gemini-3.8-flash",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.1-flash-lite"
     ]
     last_error = None
 
