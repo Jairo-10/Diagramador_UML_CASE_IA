@@ -6,10 +6,10 @@ import json
 from django.conf import settings
 from uuid import uuid4
 
-# Configurar Sesión Persistente con Reintentos (ISO/IEC 25010 - Fiabilidad)
-# Se ajustan reintentos y factor de retroceso (backoff) para conexiones inestables/lentas.
+# Configurar Sesión Persistente con Failover Inmediato (ISO/IEC 25010 - Eficiencia y Rendimiento)
+# No retenemos peticiones con 503/429 en el adapter; dejamos que salte de inmediato al siguiente modelo.
 gemini_session = requests.Session()
-retries = Retry(total=5, backoff_factor=1.5, status_forcelist=[ 500, 502, 503, 504, 429 ])
+retries = Retry(total=1, backoff_factor=0.1, status=0, connect=1, read=1)
 gemini_session.mount('https://', HTTPAdapter(max_retries=retries, pool_connections=10, pool_maxsize=10))
 
 # Modelo oficial activo en Google AI Studio (2025/2026)
@@ -142,23 +142,22 @@ FORMATO OBLIGATORIO (JSON PURO):
         }
     }
 
-    # Modelos Flash ultrarrápidos y de alta disponibilidad sin saturación
+    # Modelos Lite ultrarrápidos (500 peticiones/día y respuesta en <1s) como prioridad 1
     MODELS = [
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.7-flash",
-        "gemini-flash-latest",
-        "gemini-3.8-flash",
         "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite"
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-3.8-flash"
     ]
     last_error = None
 
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=30)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=8)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result['candidates'][0]['content']['parts'][0]['text']
@@ -223,21 +222,20 @@ Prompt:
     }
 
     MODELS = [
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.7-flash",
-        "gemini-flash-latest",
-        "gemini-3.8-flash",
         "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite"
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-3.8-flash"
     ]
     last_error = None
 
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=45)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=10)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result["candidates"][0]["content"]["parts"][0]["text"]
@@ -338,21 +336,20 @@ Devuelve ESTRICTAMENTE este formato JSON:
     }
 
     MODELS = [
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-        "gemini-3.7-flash",
-        "gemini-flash-latest",
-        "gemini-3.8-flash",
         "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
-        "gemini-3.1-flash-lite"
+        "gemini-3.1-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-3.8-flash"
     ]
     last_error = None
 
     for model in MODELS:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = gemini_session.post(url, headers=headers, json=data, timeout=45)
+            response = gemini_session.post(url, headers=headers, json=data, timeout=15)
             if response.status_code == 200:
                 result = response.json()
                 text_output = result["candidates"][0]["content"]["parts"][0]["text"]
