@@ -1873,7 +1873,7 @@ class _{name}FormViewState extends State<{name}FormView> {{
                 ...item.{field_name}.map((e) => Padding(
                   padding: const EdgeInsets.only(left: 16, bottom: 4),
                   child: Text('• ${{e.{display_attr}.toString()}}', style: const TextStyle(fontSize: 14)),
-                ))""")
+                )),""")
             elif rel["kind"] == "one_to_one" or rel["kind"] == "many_to_one":
                 field_name = self._to_snake_case(rel['to'])
                 normalized_field = field_name.lower().replace('_', '')
@@ -1890,7 +1890,7 @@ class _{name}FormViewState extends State<{name}FormView> {{
                         attrs_to_show = display_attrs[:2]
                         
                         for attr in attrs_to_show:
-                            detail_rows.append(f"""              if (item.{field_name} != null) _buildDetailRow('{rel['to']}.{attr['name']}', item.{field_name}!.{attr['name']}.toString())""")
+                            detail_rows.append(f"""              if (item.{field_name} != null) _buildDetailRow('{rel['to']}.{attr['name']}', item.{field_name}!.{attr['name']}.toString()),""")
         
         content = f"""import 'package:flutter/material.dart';
 import '../models/{snake_name}.dart';
