@@ -7,7 +7,16 @@ import re
 class FlutterCRUDGenerator:
     def __init__(self, uml_json):
         self.uml_json = uml_json
-        self.classes = uml_json.get('classes', [])
+        
+        # Sanitizar todos los atributos globalmente
+        classes = uml_json.get('classes', [])
+        for cls in classes:
+            if 'attributes' in cls:
+                for attr in cls['attributes']:
+                    if 'name' in attr and attr['name']:
+                        attr['name'] = re.sub(r'^[+\-#~]\s*', '', attr['name'])
+        
+        self.classes = classes
         self.relationships = uml_json.get('relationships', [])
         self.parsed_relationships = self._parse_relationships()
 
@@ -372,9 +381,6 @@ class HomePage extends StatelessWidget {{
       name = clase['name']
       relationships = self.parsed_relationships
       attributes = clase.get('attributes', [])
-      for attr in attributes:
-          if 'name' in attr and attr['name']:
-              attr['name'] = re.sub(r'^[+\-#~]\s*', '', attr['name'])
 
       # Detectar clase padre (herencia)
       parent_class = None

@@ -1,0 +1,688 @@
+{
+  "info" : {
+    "name" : "generated-app API Collection",
+    "description" : "Colección generada automáticamente para generated-app",
+    "schema" : "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable" : [ {
+    "key" : "baseUrl",
+    "value" : "http://localhost:9000",
+    "type" : "string"
+  } ],
+  "item" : [ {
+    "name" : "Boletin",
+    "item" : [ {
+      "name" : "Get All Boletin",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/boletin",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "boletin" ]
+        }
+      }
+    }, {
+      "name" : "Get One Boletin",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/boletin/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "boletin", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Create Boletin",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"codigoverificacion\" : \"Valor de ejemplo\",\n  \"fechaemision\" : \"2026-09-16\",\n  \"id\" : 1,\n  \"promediogeneral\" : 150.75\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/boletin",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "boletin" ]
+        }
+      }
+    }, {
+      "name" : "Update Boletin",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"fechaemision\" : \"2026-09-16\",\n  \"id\" : 1,\n  \"promediogeneral\" : 150.75\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/boletin/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "boletin", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Delete Boletin",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/boletin/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "boletin", "example-id" ]
+        }
+      }
+    } ]
+  }, {
+    "name" : "Calificacion",
+    "item" : [ {
+      "name" : "Get All Calificacion",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/calificacion",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "calificacion" ]
+        }
+      }
+    }, {
+      "name" : "Get One Calificacion",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/calificacion/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "calificacion", "1" ]
+        }
+      }
+    }, {
+      "name" : "Create Calificacion",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"notafinal\" : 150.75,\n  \"observacion\" : \"Valor de ejemplo\",\n  \"trimestre\" : \"Valor de ejemplo\",\n  \"inscripcionid\" : \"id-ejemplo-123\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/calificacion",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "calificacion" ]
+        }
+      }
+    }, {
+      "name" : "Update Calificacion",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"notafinal\" : 150.75,\n  \"observacion\" : \"Valor de ejemplo\",\n  \"trimestre\" : \"Valor de ejemplo\",\n  \"inscripcionid\" : \"id-ejemplo-123\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/calificacion/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "calificacion", "1" ]
+        }
+      }
+    }, {
+      "name" : "Delete Calificacion",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/calificacion/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "calificacion", "1" ]
+        }
+      }
+    } ]
+  }, {
+    "name" : "Curso",
+    "item" : [ {
+      "name" : "Get All Curso",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/curso",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "curso" ]
+        }
+      }
+    }, {
+      "name" : "Get One Curso",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/curso/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "curso", "1" ]
+        }
+      }
+    }, {
+      "name" : "Create Curso",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\",\n  \"turno\" : \"Valor de ejemplo\",\n  \"cursoPadreId\" : 1\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/curso",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "curso" ]
+        }
+      }
+    }, {
+      "name" : "Update Curso",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\",\n  \"turno\" : \"Valor de ejemplo\",\n  \"cursoPadreId\" : 1\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/curso/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "curso", "1" ]
+        }
+      }
+    }, {
+      "name" : "Delete Curso",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/curso/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "curso", "1" ]
+        }
+      }
+    } ]
+  }, {
+    "name" : "Docente",
+    "item" : [ {
+      "name" : "Get All Docente",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docente",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docente" ]
+        }
+      }
+    }, {
+      "name" : "Get One Docente",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docente/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docente", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Create Docente",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"apellido\" : \"id-ejemplo-123\",\n  \"celular\" : \"Valor de ejemplo\",\n  \"ci\" : \"Valor de ejemplo\",\n  \"fechanacimiento\" : \"2026-09-16\",\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\",\n  \"especialidad\" : \"id-ejemplo-123\",\n  \"fechacontrato\" : \"2026-09-16\",\n  \"salario\" : 150.75,\n  \"cursoid\" : 1\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docente",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docente" ]
+        }
+      }
+    }, {
+      "name" : "Update Docente",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"celular\" : \"Valor de ejemplo\",\n  \"ci\" : \"Valor de ejemplo\",\n  \"fechanacimiento\" : \"2026-09-16\",\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\",\n  \"especialidad\" : \"id-ejemplo-123\",\n  \"fechacontrato\" : \"2026-09-16\",\n  \"salario\" : 150.75,\n  \"cursoid\" : 1\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docente/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docente", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Delete Docente",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docente/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docente", "example-id" ]
+        }
+      }
+    } ]
+  }, {
+    "name" : "Estudiante",
+    "item" : [ {
+      "name" : "Get All Estudiante",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/estudiante",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "estudiante" ]
+        }
+      }
+    }, {
+      "name" : "Get One Estudiante",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/estudiante/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "estudiante", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Create Estudiante",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"apellido\" : \"id-ejemplo-123\",\n  \"celular\" : \"Valor de ejemplo\",\n  \"ci\" : \"Valor de ejemplo\",\n  \"fechanacimiento\" : \"2026-09-16\",\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\",\n  \"activo\" : true,\n  \"codigorude\" : \"Valor de ejemplo\",\n  \"tutorcontacto\" : \"Valor de ejemplo\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/estudiante",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "estudiante" ]
+        }
+      }
+    }, {
+      "name" : "Update Estudiante",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"celular\" : \"Valor de ejemplo\",\n  \"ci\" : \"Valor de ejemplo\",\n  \"fechanacimiento\" : \"2026-09-16\",\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\",\n  \"activo\" : true,\n  \"codigorude\" : \"Valor de ejemplo\",\n  \"tutorcontacto\" : \"Valor de ejemplo\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/estudiante/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "estudiante", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Delete Estudiante",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/estudiante/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "estudiante", "example-id" ]
+        }
+      }
+    } ]
+  }, {
+    "name" : "Inscripcion",
+    "item" : [ {
+      "name" : "Get All Inscripcion",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/inscripcion",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "inscripcion" ]
+        }
+      }
+    }, {
+      "name" : "Get One Inscripcion",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/inscripcion/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "inscripcion", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Create Inscripcion",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"costomatricula\" : 150.75,\n  \"estado\" : \"Valor de ejemplo\",\n  \"fechainscripcion\" : \"2026-09-16T12:00:00\",\n  \"id\" : 1,\n  \"numerofolio\" : \"Valor de ejemplo\",\n  \"boletinid\" : \"id-ejemplo-123\",\n  \"cursoid\" : 1,\n  \"estudianteid\" : \"id-ejemplo-123\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/inscripcion",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "inscripcion" ]
+        }
+      }
+    }, {
+      "name" : "Update Inscripcion",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"estado\" : \"Valor de ejemplo\",\n  \"fechainscripcion\" : \"2026-09-16T12:00:00\",\n  \"id\" : 1,\n  \"numerofolio\" : \"Valor de ejemplo\",\n  \"boletinid\" : \"id-ejemplo-123\",\n  \"cursoid\" : 1,\n  \"estudianteid\" : \"id-ejemplo-123\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/inscripcion/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "inscripcion", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Delete Inscripcion",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/inscripcion/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "inscripcion", "example-id" ]
+        }
+      }
+    } ]
+  }, {
+    "name" : "Materia",
+    "item" : [ {
+      "name" : "Get All Materia",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/materia",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "materia" ]
+        }
+      }
+    }, {
+      "name" : "Get One Materia",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/materia/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "materia", "1" ]
+        }
+      }
+    }, {
+      "name" : "Create Materia",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\",\n  \"sigla\" : \"Valor de ejemplo\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/materia",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "materia" ]
+        }
+      }
+    }, {
+      "name" : "Update Materia",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\",\n  \"sigla\" : \"Valor de ejemplo\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/materia/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "materia", "1" ]
+        }
+      }
+    }, {
+      "name" : "Delete Materia",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/materia/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "materia", "1" ]
+        }
+      }
+    } ]
+  }, {
+    "name" : "Persona",
+    "item" : [ {
+      "name" : "Get All Persona",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/persona",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "persona" ]
+        }
+      }
+    }, {
+      "name" : "Get One Persona",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/persona/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "persona", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Create Persona",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"apellido\" : \"id-ejemplo-123\",\n  \"celular\" : \"Valor de ejemplo\",\n  \"ci\" : \"Valor de ejemplo\",\n  \"fechanacimiento\" : \"2026-09-16\",\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/persona",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "persona" ]
+        }
+      }
+    }, {
+      "name" : "Update Persona",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"celular\" : \"Valor de ejemplo\",\n  \"ci\" : \"Valor de ejemplo\",\n  \"fechanacimiento\" : \"2026-09-16\",\n  \"id\" : 1,\n  \"nombre\" : \"Nombre Ejemplo\"\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/persona/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "persona", "example-id" ]
+        }
+      }
+    }, {
+      "name" : "Delete Persona",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/persona/example-id",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "persona", "example-id" ]
+        }
+      }
+    } ]
+  }, {
+    "name" : "DocenteMateria (Relación)",
+    "item" : [ {
+      "name" : "Get All DocenteMateria",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docentemateria",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docentemateria" ]
+        }
+      }
+    }, {
+      "name" : "Get One DocenteMateria",
+      "request" : {
+        "method" : "GET",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docentemateria/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docentemateria", "1" ]
+        }
+      }
+    }, {
+      "name" : "Create DocenteMateria",
+      "request" : {
+        "method" : "POST",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"docenteid\" : \"id-ejemplo-123\",\n  \"materiaid\" : 1\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docentemateria",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docentemateria" ]
+        }
+      }
+    }, {
+      "name" : "Update DocenteMateria",
+      "request" : {
+        "method" : "PUT",
+        "header" : [ {
+          "key" : "Content-Type",
+          "value" : "application/json"
+        }, {
+          "key" : "Accept",
+          "value" : "application/json"
+        } ],
+        "body" : {
+          "mode" : "raw",
+          "raw" : "{\n  \"docenteid\" : \"id-ejemplo-123\",\n  \"materiaid\" : 1\n}"
+        },
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docentemateria/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docentemateria", "1" ]
+        }
+      }
+    }, {
+      "name" : "Delete DocenteMateria",
+      "request" : {
+        "method" : "DELETE",
+        "url" : {
+          "raw" : "{{baseUrl}}/api/docentemateria/1",
+          "host" : [ "{{baseUrl}}" ],
+          "path" : [ "api", "docentemateria", "1" ]
+        }
+      }
+    } ]
+  } ]
+}
